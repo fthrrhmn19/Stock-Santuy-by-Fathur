@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Stock Santuy Analysis - dashboard analisis saham Indonesia untuk day trade, swing trade, dan long term." />
+  <title>Stock Santuy Analysis</title>
+  <link rel="icon" href="/favicon.svg" />
+  <link rel="stylesheet" href="/src/css/style.css" />
+</head>
+<body>
+  <div id="loginOverlay" class="login-overlay hidden" aria-hidden="true">
+    <form id="loginForm" class="login-card">
+      <div class="brand-mark">SS</div>
+      <p class="eyebrow">PRIVATE DASHBOARD</p>
+      <h1>Stock Santuy</h1>
+      <p class="muted">Masukkan password akses untuk membuka dashboard.</p>
+      <label for="password">Password akses</label>
+      <div class="password-wrap">
+        <input id="password" type="password" autocomplete="current-password" required />
+        <button id="togglePassword" type="button" class="ghost mini">Lihat</button>
+      </div>
+      <button class="primary wide" type="submit">Masuk</button>
+      <p id="loginError" class="error-text" role="alert"></p>
+    </form>
+  </div>
+
+  <main class="shell">
+    <header id="dashboard" class="hero-area">
+      <nav class="topnav">
+        <a class="nav-brand" href="#dashboard">Stock Santuy</a>
+        <div class="nav-links">
+          <a href="#quickSearch">Cari</a>
+          <a href="#analysisPanel">Analisa</a>
+          <a href="#tradingIdeas">Screener</a>
+          <a href="#ihsgSection">IHSG</a>
+          <a href="#newsSection">News</a>
+          <a href="#alertSection">Alert</a>
+        </div>
+        <div class="top-actions">
+          <span id="clock" class="clock"></span>
+          <button id="dailyBtn" class="ghost" type="button">Harian</button>
+          <a class="primary nav-cta" href="#analysisPanel">Analisa Saham Live</a>
+          <button id="logoutBtn" class="ghost hidden" type="button">Keluar</button>
+        </div>
+      </nav>
+
+      <section class="hero-copy">
+        <div>
+          <h1>Stock Santuy Analysis</h1>
+          <p>
+            Platform analisa saham berbasis data untuk membaca potensi day trade, swing trade,
+            dan long term dalam satu dashboard. Semua sinyal dihitung dari OHLCV, momentum,
+            volatilitas, trend, volume, dan risk management.
+          </p>
+          <div class="hero-links">
+            <a href="#quickSearch">Cari Saham</a>
+            <a href="#tradingIdeas">Ide Trading</a>
+            <a href="#investmentIdeas">Ide Investasi</a>
+            <a href="#methodology">Metodologi</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="hero-grid">
+        <article class="panel intro-panel">
+          <span class="mini-pill">Cari saham dan bedah cepat</span>
+          <h2>Ambil keputusan saham berbasis data.</h2>
+          <p>
+            Dashboard ini membaca trend, momentum, volume, support-resistance, target, stop loss,
+            timing, dan risiko. Sinyal tidak dibuat statis: daftar kandidat diambil dari scanner.
+          </p>
+          <div class="focus-grid">
+            <div><span>Fokus</span><strong>Full Analysis</strong></div>
+            <div><span>Output</span><strong>Trading + Investing</strong></div>
+            <div><span>Basis</span><strong>Teknikal + Risk</strong></div>
+          </div>
+        </article>
+
+        <form id="searchForm" class="panel quick-panel">
+          <span class="mini-pill">Quick analyze</span>
+          <h2>Analisa saham dalam hitungan detik</h2>
+          <p>Masukkan kode saham untuk melihat analisa lengkap dan setup per mode.</p>
+          <div id="quickSearch" class="search-row">
+            <input id="symbolInput" maxlength="12" placeholder="Contoh: BBCA" value="BBCA" required />
+            <button class="primary" type="submit">Analisa</button>
+          </div>
+          <div class="chips">
+            <button type="button" data-symbol="BBRI">BBRI</button>
+            <button type="button" data-symbol="BBCA">BBCA</button>
+            <button type="button" data-symbol="TLKM">TLKM</button>
+            <button type="button" data-symbol="ASII">ASII</button>
+            <button type="button" data-symbol="MDKA">MDKA</button>
+            <button type="button" data-symbol="ANTM">ANTM</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="feature-strip">
+        <article class="panel"><span class="feature-icon">T</span><div><h3>Trading Ideas</h3><p>Kandidat momentum, breakout, volume spike, dan swing.</p></div></article>
+        <article class="panel"><span class="feature-icon">I</span><div><h3>Investment Ideas</h3><p>Kandidat trend panjang, stabilitas, dan likuiditas.</p></div></article>
+        <article class="panel"><span class="feature-icon">M</span><div><h3>Metodologi Jelas</h3><p>Setiap skor menampilkan indikator dan alasan utama.</p></div></article>
+      </section>
+    </header>
+
+    <section class="status-line">
+      <span id="providerBadge" class="status neutral">Mengecek provider</span>
+      <span id="marketClock" class="muted">Market clock menunggu data.</span>
+      <div class="status-actions">
+        <span id="autoRefreshStatus" class="status neutral">Auto refresh siap</span>
+        <button id="toggleAutoRefreshBtn" class="ghost mini" type="button">Auto ON</button>
+        <button id="refreshScannerBtn" class="ghost mini" type="button">Refresh Scanner</button>
+      </div>
+    </section>
+
+    <section id="scannerLoading" class="loading"><span></span> Mengambil screener pasar...</section>
+    <div id="errorBox" class="notice danger hidden"></div>
+
+    <section id="dailyImagePanel" class="daily-modal hidden" aria-hidden="true" role="dialog" aria-labelledby="dailyModalTitle">
+      <div class="daily-modal-card">
+        <div class="daily-image-head">
+          <div>
+            <span class="mini-pill">Daily Snapshot</span>
+            <h2 id="dailyModalTitle">Rekomendasi Saham Hari Ini</h2>
+            <p class="muted">Gambar rekomendasi dibuat otomatis dari scanner terbaru.</p>
+          </div>
+          <div class="daily-actions">
+            <button id="downloadDailyBtn" class="primary" type="button">Download PNG</button>
+            <button id="closeDailyBtn" class="ghost" type="button">Tutup</button>
+          </div>
+        </div>
+        <img id="dailyImage" alt="Rekomendasi saham harian" />
+        <canvas id="dailyCanvas" width="1200" height="1500" hidden></canvas>
+      </div>
+    </section>
+
+    <section id="alertSection" class="panel alert-panel">
+      <div>
+        <span class="mini-pill">Auto Email Alert</span>
+        <h2>Notif saham potensial</h2>
+        <p id="alertStatus" class="muted">Cek kandidat skor, harmonic pattern, swing entry, dan bagger watch untuk email alert otomatis.</p>
+      </div>
+      <div class="alert-actions">
+        <button id="checkAlertBtn" class="ghost" type="button">Cek Alert</button>
+        <span id="alertEmailStatus" class="status neutral">Email env belum dicek</span>
+      </div>
+    </section>
+
+    <section id="tradingIdeas" class="section">
+      <div class="section-head">
+        <div>
+          <span class="mini-pill">Trading screener</span>
+          <h2>Saham menarik untuk trading</h2>
+          <p>Daftar diambil otomatis dari candle intraday gratis saat tersedia. Klik analisa untuk membuka detail.</p>
+        </div>
+      </div>
+      <div id="tradingGrid" class="screener-grid"></div>
+    </section>
+
+    <section id="investmentIdeas" class="section">
+      <div class="section-head">
+        <div>
+          <span class="mini-pill">Investment screener</span>
+          <h2>Saham menarik untuk investasi</h2>
+          <p>Filter berbasis trend panjang, stabilitas, volume, dan risk-adjusted technical score.</p>
+        </div>
+      </div>
+      <div id="investmentGrid" class="screener-grid"></div>
+    </section>
+
+    <section id="baggerIdeas" class="section">
+      <div class="section-head">
+        <div>
+          <span class="mini-pill">Potential bagger screener</span>
+          <h2>Kandidat bagger & ekspansi</h2>
+          <p>Filter awal berbasis trend panjang, likuiditas, diskon proxy, dan sinyal akumulasi. Validasi akhir tetap dari lapkeu dan berita ekspansi.</p>
+        </div>
+      </div>
+      <div id="baggerGrid" class="screener-grid"></div>
+    </section>
+
+    <section id="marketScanner" class="section">
+      <div class="section-head">
+        <div>
+          <span class="mini-pill">AI Market Scanner</span>
+          <h2>Deteksi pergerakan pasar secara live/delayed</h2>
+          <p>Scanner mengelompokkan saham yang sedang aktif: uptrend, breakout, lonjakan volume, dan top gainer.</p>
+        </div>
+      </div>
+      <div class="movement-grid">
+        <article class="panel movement-card">
+          <h3>Top Gainer</h3>
+          <p id="marketMoverSource" class="movement-note">Menunggu data market mover.</p>
+          <div id="gainerList" class="mover-list"></div>
+        </article>
+        <article class="panel movement-card">
+          <h3>Top Loser</h3>
+          <p class="movement-note">Penurunan harga terbesar.</p>
+          <div id="loserList" class="mover-list"></div>
+        </article>
+        <article class="panel movement-card">
+          <h3>Top Value</h3>
+          <p class="movement-note">Turnover transaksi terbesar.</p>
+          <div id="valueList" class="mover-list"></div>
+        </article>
+        <article class="panel movement-card">
+          <h3>Top Volume</h3>
+          <p class="movement-note">Volume lot transaksi terbesar.</p>
+          <div id="topVolumeList" class="mover-list"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="ihsgSection" class="section">
+      <div class="section-head">
+        <div>
+          <span class="mini-pill">IDX Market Index</span>
+          <h2>Chart IHSG</h2>
+          <p>Baca arah pasar sebelum memilih entry. Saat IHSG lemah, setup saham perlu seleksi lebih ketat.</p>
+        </div>
+        <span id="ihsgStatus" class="status neutral">Menunggu IHSG</span>
+      </div>
+      <article class="panel ihsg-panel">
+        <div class="card-head">
+          <div>
+            <h3>IHSG / JKSE</h3>
+            <p id="ihsgMeta" class="muted">Mengambil data indeks.</p>
+          </div>
+          <div class="ihsg-summary">
+            <strong id="ihsgLast">-</strong>
+            <span id="ihsgChange" class="neutral">-</span>
+          </div>
+        </div>
+        <div id="ihsgChart"></div>
+      </article>
+    </section>
+
+    <section id="analysisPanel" class="section analysis-section">
+      <div class="section-head">
+        <div>
+          <span class="mini-pill">Full Analisa Saham</span>
+          <h2 id="analysisTitle">BBCA</h2>
+          <p id="analysisSubtitle">Masukkan kode saham untuk melihat teknikal, valuasi proxy, risiko, dan strategi.</p>
+        </div>
+        <span id="dataStatus" class="status neutral">Menunggu data</span>
+      </div>
+
+      <div id="analysisLoading" class="loading hidden"><span></span> Mengambil dan menghitung analisa...</div>
+
+      <div class="analysis-layout">
+        <article class="panel symbol-card">
+          <div class="symbol-head">
+            <div>
+              <h2 id="symbolName">-</h2>
+              <p id="companyName" class="muted">-</p>
+              <div class="badge-row">
+                <span id="sourceNote" class="source-badge">Data belum dimuat</span>
+                <span id="valuationBadge" class="source-badge warn">Valuasi belum dihitung</span>
+              </div>
+            </div>
+            <span id="overallLabel" class="status neutral">-</span>
+          </div>
+          <div class="price-row">
+            <strong id="lastPrice">-</strong>
+            <span id="priceChange">-</span>
+          </div>
+          <div class="ohlc-row">
+            <span id="openValue">Open -</span>
+            <span id="highValue">High -</span>
+            <span id="lowValue">Low -</span>
+          </div>
+        </article>
+
+        <article class="panel insight-card">
+          <h3>Insight Utama</h3>
+          <div class="insight-grid">
+            <p><span>Trend utama</span><strong id="trendValue">-</strong></p>
+            <p><span>Mode terbaik saat ini</span><strong id="bestMode">-</strong></p>
+            <p><span>Faktor dominan</span><strong id="dominantFactor">-</strong></p>
+            <p><span>Level invalidasi utama</span><strong id="invalidationLevel">-</strong></p>
+          </div>
+          <div class="verdict-box">
+            <strong>Final Verdict</strong>
+            <p id="finalVerdict">Analisis belum dijalankan.</p>
+          </div>
+        </article>
+      </div>
+
+      <section class="panel mode-panel">
+        <div class="mode-tabs" role="tablist" aria-label="Mode analisa">
+          <button class="active" type="button" data-mode-tab="day">Day Trade</button>
+          <button type="button" data-mode-tab="swing">Swing</button>
+          <button type="button" data-mode-tab="long">Long Term</button>
+          <button type="button" data-mode-tab="bagger">Potential Bagger</button>
+        </div>
+        <div class="mode-summary">
+          <div>
+            <span id="modeKicker" class="mini-pill">Day Trade</span>
+            <h3 id="modeTitle">Setup cepat</h3>
+            <p id="modeDescription">Analisis belum dijalankan.</p>
+          </div>
+          <strong id="modeScore">-</strong>
+        </div>
+        <div id="modeReasons" class="mode-reasons"></div>
+      </section>
+
+      <section class="panel ebook-panel">
+        <div class="card-head">
+          <div>
+            <span class="mini-pill">E-book Strategy Engine</span>
+            <h3>Validasi dari e-book</h3>
+            <p class="muted">Sinyal ini hanya memakai aturan yang bisa dihitung dari data OHLCV. Aturan lapkeu tetap ditandai butuh data.</p>
+          </div>
+          <span id="ebookScore" class="status neutral">Menunggu</span>
+        </div>
+        <div id="ebookSignalGrid" class="ebook-grid"></div>
+        <div id="ebookDataNeeds" class="ebook-data-needs"></div>
+      </section>
+
+      <div class="analysis-grid">
+        <article class="panel chart-panel">
+          <div class="card-head">
+            <div>
+              <h3>Grafik Harga</h3>
+              <span id="chartMeta" class="muted">Daily</span>
+            </div>
+            <div id="chartRangeControls" class="chart-ranges" aria-label="Rentang chart">
+              <button class="active" type="button" data-chart-range="1d">1D</button>
+              <button type="button" data-chart-range="1w">1W</button>
+              <button type="button" data-chart-range="1mo">1Bln</button>
+              <button type="button" data-chart-range="3mo">3Bln</button>
+              <button type="button" data-chart-range="6mo">6Bln</button>
+              <button type="button" data-chart-range="1y">1Th</button>
+            </div>
+          </div>
+          <div id="chart"></div>
+        </article>
+        <article class="panel score-panel">
+          <div class="card-head">
+            <h3>Skor Mode</h3>
+            <span id="swingLabel" class="status neutral">-</span>
+          </div>
+          <div class="score-ring"><strong id="swingScore">-</strong><span>/100</span></div>
+          <ul id="swingReasons" class="reason-list"><li>Analisis belum dijalankan.</li></ul>
+        </article>
+      </div>
+
+      <section class="panel setup-panel">
+        <h3>Trade Setup Analyzer</h3>
+        <div class="setup-grid">
+          <article>
+            <span class="setup-kicker">Day Trade</span>
+            <strong id="dayScore">-</strong>
+            <div class="setup-values">
+              <p><span>Buy on weakness</span><strong id="dayEntryWeak">-</strong></p>
+              <p><span>Breakout entry</span><strong id="dayBreakout">-</strong></p>
+              <p><span>Cut loss</span><strong id="dayStop">-</strong></p>
+              <p><span>TP1</span><strong id="dayTarget1">-</strong></p>
+              <p><span>TP2</span><strong id="dayTarget2">-</strong></p>
+            </div>
+          </article>
+          <article>
+            <span class="setup-kicker">Swing Trade</span>
+            <strong id="swingModeScore">-</strong>
+            <div class="setup-values">
+              <p><span>Buy on pullback</span><strong id="swingEntryPullback">-</strong></p>
+              <p><span>Aggressive entry</span><strong id="swingEntryAggressive">-</strong></p>
+              <p><span>Cut loss</span><strong id="swingStop">-</strong></p>
+              <p><span>TP1</span><strong id="swingTarget1">-</strong></p>
+              <p><span>TP2</span><strong id="swingTarget2">-</strong></p>
+              <p><span>TP3</span><strong id="swingTarget3">-</strong></p>
+            </div>
+          </article>
+          <article>
+            <span class="setup-kicker">Long Term</span>
+            <strong id="longModeScore">-</strong>
+            <div class="setup-values">
+              <p><span>Akumulasi ideal</span><strong id="longAccumulation">-</strong></p>
+              <p><span>Trend guard</span><strong id="longGuard">-</strong></p>
+              <p><span>Invalidasi</span><strong id="longInvalidation">-</strong></p>
+              <p><span>Fair value proxy</span><strong id="longFairValue">-</strong></p>
+            </div>
+          </article>
+          <article>
+            <span class="setup-kicker">Potential Bagger</span>
+            <strong id="baggerModeScore">-</strong>
+            <div class="setup-values">
+              <p><span>Zona akumulasi</span><strong id="baggerZone">-</strong></p>
+              <p><span>Konfirmasi</span><strong id="baggerConfirm">-</strong></p>
+              <p><span>Invalidasi</span><strong id="baggerInvalidation">-</strong></p>
+              <p><span>Validasi wajib</span><strong id="baggerChecklist">Lapkeu + ekspansi</strong></p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="detail-columns">
+        <article class="panel detail-card">
+          <h3>Sinyal Teknikal</h3>
+          <div class="metric-list">
+            <p><span>Trend</span><strong id="techTrend">-</strong></p>
+            <p><span>RSI 14</span><strong id="rsiValue">-</strong><small id="rsiNote">-</small></p>
+            <p><span>MACD</span><strong id="macdValue">-</strong></p>
+            <p><span>Volume</span><strong id="rvolValue">-</strong><small id="rvolNote">-</small></p>
+            <p><span>Volatilitas</span><strong id="volatilityValue">-</strong></p>
+            <p><span>Momentum</span><strong id="momentumValue">-</strong></p>
+          </div>
+          <div class="candle-pattern-box">
+            <h4>Pola Candle</h4>
+            <div id="candlePatternList" class="pattern-list"><p class="muted">Analisis belum dijalankan.</p></div>
+          </div>
+          <div class="candle-pattern-box">
+            <h4>Harmonic Pattern</h4>
+            <div id="harmonicPatternList" class="pattern-list"><p class="muted">Analisis belum dijalankan.</p></div>
+          </div>
+        </article>
+
+        <article class="panel detail-card">
+          <h3>Valuasi & Fundamental</h3>
+          <span id="fundamentalSource" class="source-badge">Proxy teknikal</span>
+          <div class="metric-list fundamental-list">
+            <p><span>Fair value teknikal</span><strong id="fairValue">-</strong><small id="fairGap">-</small></p>
+            <p><span>Status valuasi</span><strong id="valuationStatus">-</strong><small id="valuationNote">Menunggu data.</small></p>
+            <p><span>Market cap</span><strong id="marketCapValue">-</strong><small id="marketCapNote">public stats</small></p>
+            <p><span>EPS TTM</span><strong id="epsValue">-</strong><small id="epsNote">butuh lapkeu</small></p>
+            <p><span>PER</span><strong id="perValue">-</strong><small id="perNote">harga / EPS</small></p>
+            <p><span>PBV</span><strong id="pbvValue">-</strong><small id="pbvNote">price to book</small></p>
+            <p><span>ROE</span><strong id="roeValue">-</strong><small id="roeNote">return on equity</small></p>
+            <p><span>DER</span><strong id="derValue">-</strong><small id="derNote">liabilitas / ekuitas</small></p>
+            <p><span>Trading value</span><strong id="turnoverValue">-</strong><small id="turnoverNote">nilai transaksi</small></p>
+            <p><span>Volume / lot</span><strong id="lotValue">-</strong><small id="volumeValue">-</small></p>
+            <p><span>Average price</span><strong id="averagePriceValue">-</strong><small id="iepValue">IEP -</small></p>
+            <p><span>Data confidence</span><strong id="fundamentalConfidence">-</strong><small id="fundamentalNote">Menunggu data.</small></p>
+          </div>
+        </article>
+      </section>
+
+      <section class="detail-columns">
+        <article class="panel detail-card">
+          <h3>Kualitas Perusahaan</h3>
+          <div class="metric-list">
+            <p><span>Profitabilitas proxy</span><strong id="profitabilityScore">-</strong></p>
+            <p><span>Pertumbuhan proxy</span><strong id="growthScore">-</strong></p>
+            <p><span>Stabilitas proxy</span><strong id="stabilityScore2">-</strong></p>
+            <p><span>Likuiditas proxy</span><strong id="liquidityScore2">-</strong></p>
+          </div>
+        </article>
+
+        <article class="panel detail-card">
+          <h3>Analisis Risiko</h3>
+          <div class="risk-meter"><span id="riskLevel">-</span><i id="riskBar"></i></div>
+          <div class="risk-lines">
+            <p><span>Risiko Teknikal</span><strong id="riskTechnical">-</strong></p>
+            <p><span>Risiko Valuasi</span><strong id="riskValuation">-</strong></p>
+            <p><span>Risiko Pasar</span><strong id="riskMarket">-</strong></p>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel strategy-card">
+        <h3>Rekomendasi Strategi</h3>
+        <div class="strategy-grid">
+          <p><span>Untuk trader jangka pendek</span><strong id="dayStrategy">-</strong></p>
+          <p><span>Untuk swing trader</span><strong id="swingStrategy">-</strong></p>
+          <p><span>Untuk investor jangka panjang</span><strong id="longStrategy">-</strong></p>
+          <p><span>Risk management</span><strong id="riskStrategy">-</strong></p>
+        </div>
+      </section>
+
+      <section class="panel calculator">
+        <div>
+          <h3>Position Size</h3>
+          <p class="muted">Hitung ukuran posisi berdasarkan stop loss swing.</p>
+        </div>
+        <div class="calc-fields">
+          <label>Modal (Rp)<input id="capitalInput" type="number" value="10000000" min="0" /></label>
+          <label>Risiko (%)<input id="riskInput" type="number" value="1" min="0.1" max="5" step="0.1" /></label>
+          <button id="calculateBtn" class="primary" type="button">Hitung</button>
+        </div>
+        <div id="positionResult" class="calc-result">Jalankan analisis saham terlebih dahulu.</div>
+      </section>
+    </section>
+
+    <section id="methodology" class="section">
+      <div id="newsSection" class="section-head">
+        <div>
+          <span class="mini-pill">Market News</span>
+          <h2>News saham & sinyal ekspansi</h2>
+          <p>Berita dipakai untuk membantu validasi katalis, terutama kandidat long term dan potential bagger.</p>
+        </div>
+        <button id="refreshNewsBtn" class="ghost" type="button">Refresh News</button>
+      </div>
+      <div class="news-grid">
+        <article class="panel news-card">
+          <h3>News Terkini</h3>
+          <div id="newsList" class="news-list"><p class="muted">News belum dimuat.</p></div>
+        </article>
+        <article class="panel news-card">
+          <h3>Sinyal Ekspansi / Lapkeu</h3>
+          <div id="expansionNewsList" class="news-list"><p class="muted">Belum ada sinyal ekspansi.</p></div>
+        </article>
+      </div>
+
+      <div class="section-head">
+        <div>
+          <span class="mini-pill">Metodologi analisa</span>
+          <h2>Analisa memakai indikator apa?</h2>
+          <p>Dashboard memadukan indikator teknikal, level harga, fair value proxy, risk scoring, dan timing.</p>
+        </div>
+      </div>
+      <div class="method-grid">
+        <article class="panel"><h3>Teknikal Utama</h3><ul><li>Trend: EMA 9, 20, 50, dan 200.</li><li>Momentum: RSI dan MACD.</li><li>Volume: relative volume dan volume spike.</li><li>Support, resistance, target, dan stop loss berbasis ATR.</li></ul></article>
+        <article class="panel"><h3>Mode Analisa</h3><ul><li>Day trade memakai candle intraday saat tersedia.</li><li>Swing trade memakai struktur harian.</li><li>Long term memakai trend panjang dan stabilitas.</li><li>Semua mode punya skor dan alasan terpisah.</li></ul></article>
+        <article class="panel"><h3>Batas Akurasi</h3><ul><li>API gratis IDX biasanya delayed atau tidak resmi.</li><li>Real-time resmi membutuhkan lisensi data IDX.</li><li>Gunakan hasil sebagai alat bantu, bukan instruksi transaksi.</li><li>Selalu cek orderbook broker sebelum eksekusi.</li></ul></article>
+      </div>
+    </section>
+
+    <footer>
+      <strong>Stock Santuy by Fathur</strong>
+      <p>Alat bantu edukasi dan riset. Bukan jaminan keuntungan atau ajakan membeli/menjual efek.</p>
+    </footer>
+  </main>
+
+  <script type="module" src="/src/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.netlify/
+.env
+.env.*
+!.env.example
+.netlify-dev*
+.DS_Store
+.ebook_work/
+deno.lock
+*.out.log
+*.err.log
