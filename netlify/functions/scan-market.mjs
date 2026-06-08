@@ -14,12 +14,17 @@ const PRIORITY_UNIVERSE = [
 const MARKET_MOVER_EXTRA = [
   'MUTU', 'MMIX', 'CBPE', 'DIGI', 'LFLO', 'BTON', 'DWGL', 'ICON', 'KOIN', 'BATA',
   'WIFI', 'ARKO', 'RSGK', 'APIC', 'RMKE', 'GPSO', 'IRSX', 'WEHA', 'DOOH', 'ELPI',
-  'BUMI', 'DSSA', 'BNBR', 'DEWA', 'CUAN'
+  'BUMI', 'DSSA', 'BNBR', 'DEWA', 'CUAN', 'STAR', 'OBAT', 'GRIA', 'KONI', 'TRIN',
+  'BLES', 'APLI', 'ASPR', 'ISEA', 'FORU'
 ];
 
-const UNIVERSE = [...new Set([...PRIORITY_UNIVERSE, ...MARKET_MOVER_EXTRA, ...IDX_UNIVERSE])].slice(0, 320);
+const scanLimit = Number(process.env.SCAN_MARKET_LIMIT || 320);
+const UNIVERSE = [...new Set([...PRIORITY_UNIVERSE, ...MARKET_MOVER_EXTRA, ...IDX_UNIVERSE])]
+  .slice(0, Number.isFinite(scanLimit) && scanLimit > 0 ? scanLimit : 320);
 
 const LIQUID_INTRADAY = UNIVERSE.slice(0, 80);
+const TV_MOVER_LIMIT = 20;
+const TV_MOVER_COLUMNS = ['name', 'description', 'close', 'change', 'volume', 'Value.Traded', 'type'];
 
 const withLimit = async (items, limit, task) => {
   const out = [];
@@ -94,6 +99,102 @@ const parseCompactMetric = value => {
   return Number(match[1]) * multiplier;
 };
 
+const toNumber = value => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
+const bySymbol = items => [...new Map(items.filter(Boolean).map(item => [item.symbol, item])).values()];
+
+const tvMoverCard = row => {
+  const values = Object.fromEntries(TV_MOVER_COLUMNS.map((key, index) => [key, row?.d?.[index]]));
+  const symbol = String(values.name || row?.s || '')
+    .replace(/^IDX:/i, '')
+    .trim()
+    .toUpperCase();
+  const price = toNumber(values.close);
+  const changePct = toNumber(values.change);
+  const volume = toNumber(values.volume);
+  const tradedValue = toNumber(values['Value.Traded']);
+  if (!symbol || !Number.isFinite(price) || !Number.isFinite(changePct) || !Number.isFinite(volume) || volume <= 0) {
+    return null;
+  }
+
+  return {
+    symbol,
+    name: values.description || symbol,
+    price,
+    changeAbs: null,
+    changePct,
+    value: Number.isFinite(tradedValue) ? tradedValue : price * volume,
+    volume,
+    lot: volume / 100,
+    label: changePct >= 0 ? 'Top Gainer' : 'Top Loser',
+    trend: changePct >= 0 ? 'market gainer' : 'market loser',
+    rsi: null,
+    rvol: null,
+    statusVolume: 'TradingView market mover',
+    breakout: false,
+    support: null,
+    resistance: null,
+    source: 'TradingView Indonesia scanner'
+  };
+};
+
+const fetchTradingViewMoverList = async (sortBy, sortOrder) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+
+  try {
+    const res = await fetch('https://scanner.tradingview.com/indonesia/scan', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 StockSantuy/1.0',
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Origin: 'https://www.tradingview.com',
+        Referer: 'https://www.tradingview.com/'
+      },
+      body: JSON.stringify({
+        symbols: { tickers: [], query: { types: ['stock'] } },
+        columns: TV_MOVER_COLUMNS,
+        ignore_unknown_fields: true,
+        options: { lang: 'en' },
+        range: [0, TV_MOVER_LIMIT],
+        sort: { sortBy, sortOrder }
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `TradingView error ${res.status}`);
+    return (data?.data || []).map(tvMoverCard).filter(Boolean);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const fetchTradingViewMarketMovers = async () => {
+  const [topGainer, topLoser, topValue, topVolume] = await Promise.all([
+    fetchTradingViewMoverList('change', 'desc').then(items => items.filter(item => item.changePct > 0).slice(0, 10)),
+    fetchTradingViewMoverList('change', 'asc').then(items => items.filter(item => item.changePct < 0).slice(0, 10)),
+    fetchTradingViewMoverList('Value.Traded', 'desc').then(items => items.slice(0, 10)),
+    fetchTradingViewMoverList('volume', 'desc').then(items => items.slice(0, 10))
+  ]);
+
+  if (![topGainer, topLoser, topValue, topVolume].every(list => list.length)) {
+    throw new Error('TradingView market mover kosong.');
+  }
+
+  return {
+    topGainer,
+    topLoser,
+    topValue,
+    topVolume,
+    source: 'TradingView Indonesia scanner',
+    dataStatus: 'free/delayed - market movers from TradingView Indonesia scanner'
+  };
+};
+
 const fetchPluangStats = async symbol => {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10000);
@@ -145,6 +246,46 @@ const enrichMarketItems = async items => {
   return enriched.sort((a, b) => a.order - b.order).map(entry => entry.item);
 };
 
+const buildFallbackMarketMovers = async daily => {
+  const movers = daily
+    .map(moverCard)
+    .filter(item => Number.isFinite(item.price) && Number.isFinite(item.changePct) && item.volume > 0);
+  const topGainer = [...movers]
+    .filter(item => item.changePct > 0)
+    .sort((a, b) => b.changePct - a.changePct)
+    .slice(0, 10);
+  const topLoser = [...movers]
+    .filter(item => item.changePct < 0)
+    .sort((a, b) => a.changePct - b.changePct)
+    .slice(0, 10);
+  const enrichmentCandidates = bySymbol([
+    ...[...movers].sort((a, b) => b.value - a.value).slice(0, 40),
+    ...[...movers].sort((a, b) => b.volume - a.volume).slice(0, 40)
+  ]);
+  const enriched = await enrichMarketItems(enrichmentCandidates);
+  const enrichedBySymbol = new Map(movers.map(item => [item.symbol, { ...item, lot: item.volume / 100 }]));
+  enriched.forEach(item => enrichedBySymbol.set(item.symbol, item));
+  const enrichedMovers = [...enrichedBySymbol.values()];
+  const topValue = [...enrichedMovers]
+    .filter(item => Number.isFinite(item.value))
+    .sort((a, b) => (b.value || 0) - (a.value || 0))
+    .slice(0, 10);
+  const topVolume = [...enrichedMovers]
+    .map(item => ({ ...item, lot: Number.isFinite(item.lot) ? item.lot : item.volume / 100 }))
+    .filter(item => Number.isFinite(item.lot))
+    .sort((a, b) => (b.lot || 0) - (a.lot || 0))
+    .slice(0, 10);
+
+  return {
+    topGainer,
+    topLoser,
+    topValue,
+    topVolume,
+    source: 'Yahoo Finance IDX EOD + Pluang turnover stats',
+    dataStatus: 'free/delayed fallback - market movers computed from IDX EOD candles'
+  };
+};
+
 const baggerCard = (item, meta = {}) => {
   const score = Math.max(0, Math.min(100, Math.round(
     item.investment.score * 0.52
@@ -170,6 +311,7 @@ const baggerCard = (item, meta = {}) => {
 
 export default async () => {
   try {
+    const tradingViewMoversPromise = fetchTradingViewMarketMovers().catch(() => null);
     const daily = await withLimit(UNIVERSE, 10, async symbol => {
       const payload = await yahooChart(symbol, { interval: '1day', outputsize: 260 });
       const swing = analyzeForScan(payload.candles, 'swing');
@@ -203,42 +345,22 @@ export default async () => {
       .slice(0, 20);
 
     const allDaily = daily.map(item => card(item.symbol, item.swing, item.meta));
-    const movers = daily
-      .map(moverCard)
-      .filter(item => Number.isFinite(item.price) && Number.isFinite(item.changePct) && item.volume > 0);
-    const topGainer = movers
-      .filter(x => Number.isFinite(x.changePct))
-      .sort((a, b) => b.changePct - a.changePct)
-      .slice(0, 10);
-    const topLoser = movers
-      .filter(x => Number.isFinite(x.changePct))
-      .sort((a, b) => a.changePct - b.changePct)
-      .slice(0, 10);
-    const topValueRaw = movers
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 20);
-    const topVolumeRaw = movers
-      .sort((a, b) => b.volume - a.volume)
-      .slice(0, 10)
-      .map(item => ({ ...item, lot: item.volume / 100 }));
-    const topValueEnriched = await enrichMarketItems(topValueRaw);
-    const topValue = topValueEnriched.sort((a, b) => (b.value || 0) - (a.value || 0)).slice(0, 10);
-    const topVolume = topVolumeRaw.sort((a, b) => (b.lot || b.volume / 100) - (a.lot || a.volume / 100)).slice(0, 10);
+    const marketMovers = await tradingViewMoversPromise || await buildFallbackMarketMovers(daily);
     const market = {
       uptrend: allDaily.filter(x => x.trend === 'uptrend').sort((a, b) => b.score - a.score).slice(0, 10),
       breakout: allDaily.filter(x => x.breakout).sort((a, b) => b.changePct - a.changePct).slice(0, 10),
       volumeSpike: allDaily.filter(x => x.rvol >= 1.5).sort((a, b) => b.rvol - a.rvol).slice(0, 10),
-      topGainer,
-      topLoser,
-      topValue,
-      topVolume,
-      marketMoverSource: 'Yahoo Finance IDX EOD + Pluang turnover stats'
+      topGainer: marketMovers.topGainer,
+      topLoser: marketMovers.topLoser,
+      topValue: marketMovers.topValue,
+      topVolume: marketMovers.topVolume,
+      marketMoverSource: marketMovers.source
     };
 
     return json(200, {
       generatedAt: new Date().toISOString(),
-      provider: 'Yahoo Finance',
-      dataStatus: 'free/delayed fallback - market movers computed from IDX EOD candles',
+      provider: marketMovers.source.includes('TradingView') ? 'Yahoo Finance + TradingView' : 'Yahoo Finance',
+      dataStatus: marketMovers.dataStatus,
       trading,
       swing,
       investment,

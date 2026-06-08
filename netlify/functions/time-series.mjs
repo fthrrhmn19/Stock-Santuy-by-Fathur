@@ -5,7 +5,8 @@ import { hasYahooFallback, yahooChart } from './_shared/yahoo.mjs';
 const ttlFor = interval => {
   const key = interval === '1day' ? 'CACHE_TTL_DAILY' : 'CACHE_TTL_INTRADAY';
   const ttl = Number(process.env[key]);
-  return Number.isFinite(ttl) && ttl > 0 ? Math.floor(ttl) : 900;
+  if (Number.isFinite(ttl) && ttl > 0) return Math.floor(ttl);
+  return interval === '1day' ? 3600 : 60;
 };
 
 export default async req => {

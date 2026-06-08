@@ -215,17 +215,18 @@ function currentMarketSchedule() {
 }
 
 function marketClockText(schedule) {
+  const seconds = Math.round((schedule.refreshMs || DEFAULT_AUTO_REFRESH_MS) / 1000);
+
   if (!schedule.tradingDayOpen) {
-    return `IDX tutup ${schedule.date}: ${schedule.phaseLabel}. Chart live pause.`;
+    return `IDX tutup ${schedule.date}: ${schedule.phaseLabel}. Auto refresh tetap cek data delayed tiap ${seconds} detik.`;
   }
 
   if (schedule.open) {
-    const seconds = Math.round((schedule.refreshMs || DEFAULT_AUTO_REFRESH_MS) / 1000);
     return `IDX ${schedule.phaseLabel} berjalan. Chart live refresh tiap ${seconds} detik.`;
   }
 
   const next = schedule.nextEvent?.time ? ` Berikutnya ${schedule.nextEvent.label} ${schedule.nextEvent.time} WIB.` : '';
-  return `${schedule.phaseLabel}. Chart live pause.${next}`;
+  return `${schedule.phaseLabel}. Chart live tetap dicek tiap ${seconds} detik.${next}`;
 }
 
 function clock() {
@@ -322,15 +323,12 @@ function updateAutoRefreshStatus(message) {
     return;
   }
 
-  if (!marketRefreshActive) {
-    el.textContent = `Auto refresh pause - ${currentMarketSchedule().phaseLabel.toLowerCase()}`;
-    el.className = 'status warn';
-    return;
-  }
-
   const seconds = Math.max(0, Math.ceil((nextAutoRefreshAt - Date.now()) / 1000));
-  el.textContent = `Auto refresh ${seconds} detik`;
-  el.className = 'status good';
+  const schedule = currentMarketSchedule();
+  el.textContent = marketRefreshActive
+    ? `Auto refresh ${seconds} detik`
+    : `Auto refresh ${seconds} detik - ${schedule.phaseLabel.toLowerCase()}`;
+  el.className = `status ${marketRefreshActive ? 'good' : 'warn'}`;
 }
 
 function scheduleAutoRefresh(delay = autoRefreshMs || DEFAULT_AUTO_REFRESH_MS) {
@@ -342,6 +340,7 @@ async function refreshCurrentAnalysis() {
   if (!currentSymbol) return;
   const symbol = currentSymbol;
   const priorRange = chartRange;
+  const canRenderFromRefreshPayload = priorRange === 'live' || priorRange === '1d';
   const [dailyPayload, intradayPayload, fundamentals] = await Promise.all([
     api.series(symbol, '1day', 5000, '20y'),
     api.series(symbol, '5min', 180).catch(() => null),
@@ -354,17 +353,17 @@ async function refreshCurrentAnalysis() {
   if (intradayPayload?.candles?.length >= 30) {
     intradayAnalysis = analyze(intradayPayload.candles, { mode: 'day' });
   }
-  renderAnalysis(symbol, dailyPayload, dailyAnalysis, intradayAnalysis, fundamentals, { skipNews: true, intradayPayload });
-  if (priorRange !== chartRange) await loadChartRange(priorRange);
+  renderAnalysis(symbol, dailyPayload, dailyAnalysis, intradayAnalysis, fundamentals, {
+    skipNews: true,
+    intradayPayload,
+    preserveChartRange: canRenderFromRefreshPayload
+  });
+  if (!canRenderFromRefreshPayload && priorRange !== chartRange) await loadChartRange(priorRange);
 }
 
 async function autoRefreshNow(reason = 'auto') {
   if (!autoRefreshEnabled || autoRefreshBusy) return;
   await loadMarketSchedule();
-  if (!marketRefreshActive && reason === 'auto') {
-    scheduleAutoRefresh();
-    return;
-  }
 
   autoRefreshBusy = true;
   updateAutoRefreshStatus();
@@ -394,7 +393,7 @@ async function autoRefreshNow(reason = 'auto') {
 }
 
 setInterval(() => {
-  if (autoRefreshEnabled && marketRefreshActive && Date.now() >= nextAutoRefreshAt) autoRefreshNow();
+  if (autoRefreshEnabled && Date.now() >= nextAutoRefreshAt) autoRefreshNow();
   else updateAutoRefreshStatus();
 }, 1000);
 
@@ -991,7 +990,7 @@ function analyzeForChart(candles, fallback, range) {
 }
 
 function defaultChartRange() {
-  return marketRefreshActive && currentIntradayPayload?.candles?.length >= 30 ? 'live' : '1d';
+  return currentIntradayPayload?.candles?.length >= 30 ? 'live' : '1d';
 }
 
 function cachedChartCandles(range, dailyPayload = currentDailyPayload, intradayPayload = currentIntradayPayload) {
@@ -1322,7 +1321,7 @@ function renderAnalysis(symbol, dailyPayload, analysis, intradayAnalysis, fundam
 
   renderCandlePatterns(a);
   renderEbookSignals(a);
-  chartRange = defaultChartRange();
+  chartRange = options.preserveChartRange ? chartRange : defaultChartRange();
   setChartRangeActive(chartRange);
   const initialCandles = cachedChartCandles(chartRange, dailyPayload, currentIntradayPayload);
   const initialAnalysis = chartRange === 'live' && currentIntradayAnalysis ? currentIntradayAnalysis : a;

@@ -7,13 +7,14 @@ export default async () => {
     const marketSchedule = await idxMarketSchedule();
     const liveOptions = { interval: '5min', outputsize: 180, range: '5d' };
     const dailyOptions = { interval: '1day', outputsize: 180, range: '1y' };
+    const preferIntraday = Boolean(marketSchedule.tradingDayOpen);
     let ihsg;
-    let chartMode = marketSchedule.refreshActive ? 'live' : 'daily';
+    let chartMode = preferIntraday ? 'live' : 'daily';
 
     try {
-      ihsg = await yahooChart('^JKSE', marketSchedule.refreshActive ? liveOptions : dailyOptions);
+      ihsg = await yahooChart('^JKSE', preferIntraday ? liveOptions : dailyOptions);
     } catch (e) {
-      if (!marketSchedule.refreshActive) throw e;
+      if (!preferIntraday) throw e;
       ihsg = await yahooChart('^JKSE', dailyOptions);
       chartMode = 'daily-fallback';
     }
@@ -22,7 +23,7 @@ export default async () => {
     const prev = ihsg.candles.at(-2);
     const basis = Number(ihsg.meta?.previousClose) || prev?.close;
     const changePct = basis ? ((last.close - basis) / basis) * 100 : 0;
-    const ttl = marketSchedule.refreshActive ? 60 : 300;
+    const ttl = preferIntraday ? 60 : 300;
 
     return json(200, {
       generatedAt: new Date().toISOString(),
