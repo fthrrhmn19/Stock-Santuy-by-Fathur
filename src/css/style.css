@@ -480,6 +480,11 @@ input:focus {
   padding: 12px 0;
 }
 
+#marketClock {
+  flex: 1 1 340px;
+  min-width: 220px;
+}
+
 .status-actions {
   display: flex;
   align-items: center;

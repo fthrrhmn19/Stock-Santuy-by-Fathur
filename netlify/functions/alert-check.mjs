@@ -1,7 +1,7 @@
 import { json } from './_shared/http.mjs';
 import { sendEmail, emailConfigured } from './_shared/email.mjs';
 import { yahooChart } from './_shared/yahoo.mjs';
-import { idxTradingDay, jakartaDateKey } from './_shared/market-calendar.mjs';
+import { idxMarketSchedule } from './_shared/market-calendar.mjs';
 import scanMarket from './scan-market.mjs';
 import { analyze } from '../../src/js/analysis.js';
 
@@ -9,8 +9,12 @@ const minScore = () => Number(process.env.ALERT_MIN_SCORE || 78);
 const siteUrl = () => process.env.SITE_URL || process.env.URL || 'https://stock-santuy.netlify.app';
 const harmonicLookback = session =>
   Number(session.key === 'watch'
-    ? (process.env.HARMONIC_ALERT_RECENT_LOOKBACK || 6)
+    ? (process.env.HARMONIC_ALERT_RECENT_LOOKBACK || 1)
     : (process.env.HARMONIC_ALERT_LOOKBACK || 20));
+const watchCooldownMs = () => {
+  const hours = Number(process.env.WATCH_HARMONIC_COOLDOWN_HOURS || 4);
+  return Math.min(Math.max(Number.isFinite(hours) ? hours : 4, 1), 24) * 60 * 60 * 1000;
+};
 
 const SESSIONS = {
   default: {
@@ -51,12 +55,12 @@ const SESSIONS = {
   },
   watch: {
     key: 'watch',
-    title: 'Realtime Signal Watch',
-    subject: 'Stock Santuy Realtime Signal',
-    focus: 'Trigger otomatis untuk harmonic pattern baru, bagger kuat, dan swing entry yang sedang dekat harga masuk.',
-    modes: ['Swing Trade', 'Potential Bagger'],
+    title: 'Realtime Harmonic Pattern Watch',
+    subject: 'Stock Santuy Harmonic Pattern',
+    focus: 'Trigger realtime hanya untuk saham yang baru membentuk harmonic pattern. Sinyal yang sama masuk cooldown agar tidak mengirim berulang.',
+    modes: [],
     pickDelta: 0,
-    maxPicks: 8
+    maxPicks: 0
   }
 };
 
@@ -135,10 +139,7 @@ const withLimit = async (items, limit, task) => {
 const findHarmonicAlerts = async (scan, session) => {
   const symbols = uniqueSymbols(scan);
   const frames = session.key === 'watch'
-    ? [
-        { interval: '15min', range: '1mo', outputsize: 600, mode: 'day', label: '15m' },
-        { interval: '1day', outputsize: 320, mode: 'swing', label: '1D' }
-      ]
+    ? [{ interval: '15min', range: '1mo', outputsize: 600, mode: 'day', label: '15m' }]
     : [{ interval: '1day', outputsize: 320, mode: 'swing', label: '1D' }];
 
   const alerts = await withLimit(symbols, 5, async symbol => {
@@ -234,6 +235,44 @@ const signalCache = () => {
   return globalThis.__stockSantuySignalCache;
 };
 
+const cleanupSignalCache = () => {
+  const now = Date.now();
+  const cache = signalCache();
+  for (const [key, expires] of cache.entries()) {
+    if (expires <= now) cache.delete(key);
+  }
+  return cache;
+};
+
+const harmonicSignalKey = item => [
+  'H',
+  item.symbol,
+  item.timeframe,
+  item.pattern,
+  item.bias,
+  item.date
+].join(':');
+
+const watchSymbolKey = item => ['WATCH_SYMBOL', item.symbol].join(':');
+
+const filterFreshWatchHarmonics = alerts => {
+  const now = Date.now();
+  const cache = cleanupSignalCache();
+  const fresh = [];
+
+  alerts.forEach(item => {
+    const harmonicKey = harmonicSignalKey(item);
+    const symbolKey = watchSymbolKey(item);
+    if (cache.get(harmonicKey) > now || cache.get(symbolKey) > now) return;
+
+    cache.set(harmonicKey, now + watchCooldownMs());
+    cache.set(symbolKey, now + watchCooldownMs());
+    fresh.push(item);
+  });
+
+  return fresh;
+};
+
 const signalSignature = ({ session, picks, harmonicAlerts, baggerAlerts, swingEntryAlerts }) => [
   session.key,
   ...picks.map(item => `P:${item.mode}:${item.symbol}:${round(item.score)}`),
@@ -244,31 +283,45 @@ const signalSignature = ({ session, picks, harmonicAlerts, baggerAlerts, swingEn
 
 const shouldSend = payload => {
   if (payload.session.key !== 'watch') return true;
-  if (!payload.harmonicAlerts.length && !payload.baggerAlerts.length && !payload.swingEntryAlerts.length) return false;
+  if (!payload.harmonicAlerts.length) return false;
 
   const now = Date.now();
-  const cache = signalCache();
-  for (const [key, expires] of cache.entries()) {
-    if (expires <= now) cache.delete(key);
-  }
+  const cache = cleanupSignalCache();
   const signature = signalSignature(payload);
   if (cache.get(signature) > now) return false;
-  cache.set(signature, now + 4 * 60 * 60 * 1000);
+  cache.set(signature, now + watchCooldownMs());
   return true;
 };
 
 const row = cells => `<tr>${cells.map(cell => `<td style="padding:8px;border-top:1px solid #46675f">${cell}</td>`).join('')}</tr>`;
 
-const emailHtml = ({ session, picks, harmonicAlerts, baggerAlerts, swingEntryAlerts }) => `
-  <div style="font-family:Arial,sans-serif;background:#102c27;color:#f3ead5;padding:24px">
-    <h1 style="margin-top:0">${esc(session.title)}</h1>
-    <p>${esc(session.focus)}</p>
-    <p>
-      Kandidat skor: <strong>${picks.length}</strong>,
-      harmonic: <strong>${harmonicAlerts.length}</strong>,
-      bagger: <strong>${baggerAlerts.length}</strong>,
-      swing entry: <strong>${swingEntryAlerts.length}</strong>.
-    </p>
+const harmonicTable = harmonicAlerts => `
+  <h2 style="margin-top:24px">Harmonic Pattern Baru</h2>
+  <table style="width:100%;border-collapse:collapse">
+    <thead><tr><th align="left">Saham</th><th align="left">TF</th><th align="left">Pattern</th><th align="left">Bias</th><th align="left">Harga</th></tr></thead>
+    <tbody>${harmonicAlerts.map(item => row([
+      `<strong>${esc(item.symbol)}</strong>`,
+      esc(item.timeframe),
+      esc(item.pattern),
+      esc(item.bias),
+      rupiah(item.price)
+    ])).join('')}</tbody>
+  </table>
+`;
+
+const emailHtml = ({ session, picks, harmonicAlerts, baggerAlerts, swingEntryAlerts }) => {
+  const watch = session.key === 'watch';
+  return `
+    <div style="font-family:Arial,sans-serif;background:#102c27;color:#f3ead5;padding:24px">
+      <h1 style="margin-top:0">${esc(session.title)}</h1>
+      <p>${esc(session.focus)}</p>
+      <p>${watch
+        ? `Harmonic pattern baru: <strong>${harmonicAlerts.length}</strong>.`
+        : `Kandidat skor: <strong>${picks.length}</strong>,
+          harmonic: <strong>${harmonicAlerts.length}</strong>,
+          bagger: <strong>${baggerAlerts.length}</strong>,
+          swing entry: <strong>${swingEntryAlerts.length}</strong>.`
+      }</p>
     ${picks.length ? `
       <h2 style="margin-top:24px">Kandidat Utama</h2>
       <table style="width:100%;border-collapse:collapse">
@@ -295,19 +348,7 @@ const emailHtml = ({ session, picks, harmonicAlerts, baggerAlerts, swingEntryAle
         ])).join('')}</tbody>
       </table>
     ` : ''}
-    ${harmonicAlerts.length ? `
-      <h2 style="margin-top:24px">Harmonic Pattern Baru</h2>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr><th align="left">Saham</th><th align="left">TF</th><th align="left">Pattern</th><th align="left">Bias</th><th align="left">Harga</th></tr></thead>
-        <tbody>${harmonicAlerts.map(item => row([
-          `<strong>${esc(item.symbol)}</strong>`,
-          esc(item.timeframe),
-          esc(item.pattern),
-          esc(item.bias),
-          rupiah(item.price)
-        ])).join('')}</tbody>
-      </table>
-    ` : ''}
+    ${harmonicAlerts.length ? harmonicTable(harmonicAlerts) : ''}
     ${baggerAlerts.length ? `
       <h2 style="margin-top:24px">Potential Bagger Watch</h2>
       <table style="width:100%;border-collapse:collapse">
@@ -325,23 +366,36 @@ const emailHtml = ({ session, picks, harmonicAlerts, baggerAlerts, swingEntryAle
     <p style="font-size:12px;color:#d5cbb6">Data gratis dapat delayed. Cek ulang orderbook broker sebelum transaksi. Bukan instruksi transaksi.</p>
   </div>
 `;
+};
 
-const emailText = ({ session, picks, harmonicAlerts, baggerAlerts, swingEntryAlerts }) => [
-  session.title,
-  session.focus,
-  '',
-  `Kandidat skor: ${picks.length}`,
-  ...picks.map(item => `${item.mode}: ${item.symbol} score ${round(item.score)} harga ${rupiah(item.price)}`),
-  '',
-  `Swing entry: ${swingEntryAlerts.length}`,
-  ...swingEntryAlerts.map(item => `${item.symbol}: ${item.trigger}, entry ${rupiah(item.entry)}, stop ${rupiah(item.stop)}, TP1 ${rupiah(item.target1)}`),
-  '',
-  `Harmonic pattern: ${harmonicAlerts.length}`,
-  ...harmonicAlerts.map(item => `${item.symbol}: ${item.timeframe} ${item.bias} ${item.pattern} score ${round(item.score)}`),
-  '',
-  `Potential bagger: ${baggerAlerts.length}`,
-  ...baggerAlerts.map(item => `${item.symbol}: ${item.label} score ${round(item.score)} - ${item.validation}`)
-].join('\n');
+const emailText = ({ session, picks, harmonicAlerts, baggerAlerts, swingEntryAlerts }) => {
+  if (session.key === 'watch') {
+    return [
+      session.title,
+      session.focus,
+      '',
+      `Harmonic pattern baru: ${harmonicAlerts.length}`,
+      ...harmonicAlerts.map(item => `${item.symbol}: ${item.timeframe} ${item.bias} ${item.pattern} score ${round(item.score)} harga ${rupiah(item.price)}`)
+    ].join('\n');
+  }
+
+  return [
+    session.title,
+    session.focus,
+    '',
+    `Kandidat skor: ${picks.length}`,
+    ...picks.map(item => `${item.mode}: ${item.symbol} score ${round(item.score)} harga ${rupiah(item.price)}`),
+    '',
+    `Swing entry: ${swingEntryAlerts.length}`,
+    ...swingEntryAlerts.map(item => `${item.symbol}: ${item.trigger}, entry ${rupiah(item.entry)}, stop ${rupiah(item.stop)}, TP1 ${rupiah(item.target1)}`),
+    '',
+    `Harmonic pattern: ${harmonicAlerts.length}`,
+    ...harmonicAlerts.map(item => `${item.symbol}: ${item.timeframe} ${item.bias} ${item.pattern} score ${round(item.score)}`),
+    '',
+    `Potential bagger: ${baggerAlerts.length}`,
+    ...baggerAlerts.map(item => `${item.symbol}: ${item.label} score ${round(item.score)} - ${item.validation}`)
+  ].join('\n');
+};
 
 export default async req => {
   try {
@@ -354,7 +408,13 @@ export default async req => {
     const scheduledRun = req.headers.get('X-NF-Event') === 'schedule';
     const sendRequested = forceSend || scheduledRun || req.method !== 'GET';
     const quickStatus = !sendRequested && session.key === 'default';
-    const marketDay = await idxTradingDay(jakartaDateKey());
+    const marketSchedule = await idxMarketSchedule();
+    const marketDay = {
+      open: marketSchedule.tradingDayOpen,
+      date: marketSchedule.date,
+      reason: marketSchedule.holidayReason || 'Trading day',
+      source: marketSchedule.holidaySource || marketSchedule.source
+    };
 
     if (sendRequested && !marketDay.open) {
       return json(200, {
@@ -381,16 +441,54 @@ export default async req => {
       });
     }
 
+    if (sendRequested && session.key === 'watch' && !marketSchedule.refreshActive) {
+      return json(200, {
+        generatedAt: new Date().toISOString(),
+        emailConfigured: emailConfigured(),
+        session: session.key,
+        sessionTitle: session.title,
+        minScore: thresholdFor(session),
+        marketDay,
+        marketSchedule,
+        skipped: true,
+        count: 0,
+        harmonicCount: 0,
+        baggerCount: 0,
+        swingEntryCount: 0,
+        picks: [],
+        harmonicAlerts: [],
+        baggerAlerts: [],
+        swingEntryAlerts: [],
+        email: {
+          ok: false,
+          skipped: true,
+          message: `Watch alert pause karena ${marketSchedule.phaseLabel}.`
+        }
+      });
+    }
+
     const res = await scanMarket(new Request(`${siteUrl()}/api/scan-market`));
     const scan = await res.json();
-    const [harmonicAlerts, swingEntryAlerts] = quickStatus
-      ? [[], []]
-      : await Promise.all([
-          findHarmonicAlerts(scan, session),
-          findSwingEntryAlerts(scan)
-        ]);
-    const picks = pickCandidates(scan, session);
-    const baggerAlerts = findBaggerAlerts(scan);
+    const watchSession = session.key === 'watch';
+    let harmonicAlerts = [];
+    let swingEntryAlerts = [];
+    let picks = [];
+    let baggerAlerts = [];
+
+    if (!quickStatus) {
+      harmonicAlerts = await findHarmonicAlerts(scan, session);
+    }
+
+    if (watchSession) {
+      harmonicAlerts = sendRequested ? filterFreshWatchHarmonics(harmonicAlerts) : harmonicAlerts;
+    } else {
+      [swingEntryAlerts, picks, baggerAlerts] = await Promise.all([
+        quickStatus ? [] : findSwingEntryAlerts(scan),
+        pickCandidates(scan, session),
+        findBaggerAlerts(scan)
+      ]);
+    }
+
     const payload = { session, picks, harmonicAlerts, baggerAlerts, swingEntryAlerts };
     let email = { ok: false, skipped: true, message: 'Tidak ada email dikirim.' };
     const hasSignal = picks.length || harmonicAlerts.length || baggerAlerts.length || swingEntryAlerts.length;
@@ -398,7 +496,9 @@ export default async req => {
 
     if (canSend) {
       email = await sendEmail({
-        subject: `${session.subject}: ${picks.length} kandidat, ${harmonicAlerts.length} harmonic, ${swingEntryAlerts.length} entry`,
+        subject: watchSession
+          ? `${session.subject}: ${harmonicAlerts.length} pattern baru`
+          : `${session.subject}: ${picks.length} kandidat, ${harmonicAlerts.length} harmonic, ${swingEntryAlerts.length} entry`,
         html: emailHtml(payload),
         text: emailText(payload)
       });
@@ -413,6 +513,7 @@ export default async req => {
       sessionTitle: session.title,
       minScore: thresholdFor(session),
       marketDay,
+      marketSchedule,
       quickStatus,
       count: picks.length,
       harmonicCount: harmonicAlerts.length,

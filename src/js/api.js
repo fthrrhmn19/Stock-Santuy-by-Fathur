@@ -7,6 +7,7 @@ async function request(path) {
 
 export const api = {
   status: () => request('/api/status'),
+  schedule: () => request('/api/market-schedule'),
   scan: () => request('/api/scan-market'),
   index: () => request('/api/market-index'),
   fundamentals: symbol => request(`/api/fundamentals?symbol=${encodeURIComponent(symbol || '')}`),

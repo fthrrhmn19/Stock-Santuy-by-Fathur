@@ -7,18 +7,25 @@ let current = null;
 let currentSymbol = null;
 let currentDailyPayload = null;
 let currentDailyAnalysis = null;
+let currentIntradayPayload = null;
+let currentIntradayAnalysis = null;
 let chart = null;
 let indexChart = null;
 let lastScan = null;
 let activeMode = 'day';
-let chartRange = '1d';
+let chartRange = 'live';
 let chartLoadToken = 0;
 let marketIsOpen = false;
+let marketRefreshActive = false;
+let marketSchedule = null;
+let marketScheduleLoadedAt = 0;
 let autoRefreshEnabled = true;
 let autoRefreshBusy = false;
+let autoRefreshMs = 60_000;
 let nextAutoRefreshAt = Date.now() + 60_000;
 
-const AUTO_REFRESH_MS = 60_000;
+const DEFAULT_AUTO_REFRESH_MS = 60_000;
+const MARKET_SCHEDULE_MAX_AGE_MS = 90_000;
 
 const rupiah = n => Number.isFinite(n)
   ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
@@ -104,6 +111,123 @@ const valuationView = analysis => {
   };
 };
 
+const marketTimeSeconds = value => {
+  const [hour, minute, second = 0] = String(value).split(':').map(Number);
+  return hour * 3600 + minute * 60 + second;
+};
+
+function jakartaParts(date = new Date()) {
+  const dateKey = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jakarta',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(date).reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+  const hour = Number(parts.hour) % 24;
+
+  return {
+    dateKey,
+    weekday: parts.weekday,
+    seconds: hour * 3600 + Number(parts.minute) * 60 + Number(parts.second)
+  };
+}
+
+function regularMarketSessions(weekday) {
+  const friday = weekday === 'Fri';
+  const sessionOneEnd = friday ? '11:30:00' : '12:00:00';
+  const sessionTwoStart = friday ? '14:00:00' : '13:30:00';
+
+  return [
+    { code: 'preopen', label: 'Pra-pembukaan', start: '08:45:00', end: '08:59:59', open: false },
+    { code: 'session-1', label: 'Sesi I', start: '09:00:00', end: sessionOneEnd, open: true },
+    { code: 'break', label: 'Istirahat sesi', start: sessionOneEnd, end: sessionTwoStart, open: false },
+    { code: 'session-2', label: 'Sesi II', start: sessionTwoStart, end: '15:49:59', open: true },
+    { code: 'preclose', label: 'Pra-penutupan', start: '15:50:00', end: '16:01:59', open: false },
+    { code: 'postclose', label: 'Pasca-penutupan', start: '16:02:00', end: '16:15:00', open: false }
+  ].map(session => ({
+    ...session,
+    startSeconds: marketTimeSeconds(session.start),
+    endSeconds: marketTimeSeconds(session.end)
+  }));
+}
+
+function localMarketSchedule(date = new Date()) {
+  const parts = jakartaParts(date);
+  const weekdayOpen = !['Sat', 'Sun'].includes(parts.weekday);
+  const sessions = regularMarketSessions(parts.weekday);
+  const current = sessions.find(session => parts.seconds >= session.startSeconds && parts.seconds <= session.endSeconds);
+  const beforeOpen = parts.seconds < sessions[0].startSeconds;
+  const nextOpen = sessions.find(session => session.open && parts.seconds < session.startSeconds);
+
+  return {
+    date: parts.dateKey,
+    tradingDayOpen: weekdayOpen,
+    open: Boolean(weekdayOpen && current?.open),
+    refreshActive: Boolean(weekdayOpen && current?.open),
+    phase: weekdayOpen ? (current?.code || (beforeOpen ? 'before-open' : 'closed')) : 'closed-day',
+    phaseLabel: weekdayOpen ? (current?.label || (beforeOpen ? 'Menunggu pra-pembukaan' : 'Market tutup')) : 'Weekend',
+    currentSession: current || null,
+    nextEvent: current?.open
+      ? { type: 'close', label: `${current.label} selesai`, time: current.end }
+      : nextOpen
+        ? { type: 'open', label: `${nextOpen.label} mulai`, time: nextOpen.start }
+        : { type: 'next-day', label: 'Menunggu hari bursa berikutnya', time: null },
+    refreshMs: autoRefreshMs || DEFAULT_AUTO_REFRESH_MS,
+    source: 'Jadwal lokal IDX'
+  };
+}
+
+function currentMarketSchedule() {
+  const local = localMarketSchedule();
+  const freshServerSchedule = marketSchedule
+    && Date.now() - marketScheduleLoadedAt < MARKET_SCHEDULE_MAX_AGE_MS
+    && marketSchedule.date === local.date;
+
+  if (!freshServerSchedule) return local;
+
+  if (!marketSchedule.tradingDayOpen) {
+    return {
+      ...local,
+      tradingDayOpen: false,
+      open: false,
+      refreshActive: false,
+      phase: 'closed-day',
+      phaseLabel: marketSchedule.holidayReason || 'Hari libur bursa',
+      holidayReason: marketSchedule.holidayReason,
+      holidaySource: marketSchedule.holidaySource,
+      source: marketSchedule.source
+    };
+  }
+
+  return {
+    ...local,
+    source: marketSchedule.source,
+    refreshMs: marketSchedule.refreshMs || local.refreshMs
+  };
+}
+
+function marketClockText(schedule) {
+  if (!schedule.tradingDayOpen) {
+    return `IDX tutup ${schedule.date}: ${schedule.phaseLabel}. Chart live pause.`;
+  }
+
+  if (schedule.open) {
+    const seconds = Math.round((schedule.refreshMs || DEFAULT_AUTO_REFRESH_MS) / 1000);
+    return `IDX ${schedule.phaseLabel} berjalan. Chart live refresh tiap ${seconds} detik.`;
+  }
+
+  const next = schedule.nextEvent?.time ? ` Berikutnya ${schedule.nextEvent.label} ${schedule.nextEvent.time} WIB.` : '';
+  return `${schedule.phaseLabel}. Chart live pause.${next}`;
+}
+
 function clock() {
   const now = new Date();
   setText('clock', new Intl.DateTimeFormat('id-ID', {
@@ -112,21 +236,11 @@ function clock() {
     timeStyle: 'medium'
   }).format(now));
 
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Jakarta',
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  }).formatToParts(now).reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
-  const minutes = Number(parts.hour) * 60 + Number(parts.minute);
-  const weekday = parts.weekday;
-  const weekdayOpen = !['Sat', 'Sun'].includes(weekday);
-  const inMorning = minutes >= 9 * 60 && minutes <= 11 * 60 + 30;
-  const inAfternoon = minutes >= 13 * 60 + 30 && minutes <= 15 * 60;
-  const open = weekdayOpen && (inMorning || inAfternoon);
-  marketIsOpen = open;
-  setText('marketClock', open ? 'IDX kira-kira sedang sesi perdagangan. Tetap cek orderbook broker.' : 'IDX kemungkinan di luar sesi perdagangan. Data gratis bisa delayed/EOD.');
+  const schedule = currentMarketSchedule();
+  marketIsOpen = Boolean(schedule.open);
+  marketRefreshActive = Boolean(schedule.refreshActive);
+  autoRefreshMs = schedule.refreshMs || DEFAULT_AUTO_REFRESH_MS;
+  setText('marketClock', marketClockText(schedule));
   updateAutoRefreshStatus();
 }
 
@@ -154,6 +268,26 @@ async function checkStatus() {
   } catch {
     $('providerBadge').textContent = 'API tidak terhubung';
     $('providerBadge').className = 'status bad';
+  }
+}
+
+async function loadMarketSchedule() {
+  try {
+    marketSchedule = await api.schedule();
+    marketScheduleLoadedAt = Date.now();
+    const schedule = currentMarketSchedule();
+    marketIsOpen = Boolean(schedule.open);
+    marketRefreshActive = Boolean(schedule.refreshActive);
+    autoRefreshMs = schedule.refreshMs || DEFAULT_AUTO_REFRESH_MS;
+    setText('marketClock', marketClockText(schedule));
+    updateAutoRefreshStatus();
+    return schedule;
+  } catch {
+    const schedule = currentMarketSchedule();
+    marketIsOpen = Boolean(schedule.open);
+    marketRefreshActive = Boolean(schedule.refreshActive);
+    updateAutoRefreshStatus();
+    return schedule;
   }
 }
 
@@ -188,8 +322,8 @@ function updateAutoRefreshStatus(message) {
     return;
   }
 
-  if (!marketIsOpen) {
-    el.textContent = 'Auto refresh pause - market tutup';
+  if (!marketRefreshActive) {
+    el.textContent = `Auto refresh pause - ${currentMarketSchedule().phaseLabel.toLowerCase()}`;
     el.className = 'status warn';
     return;
   }
@@ -199,7 +333,7 @@ function updateAutoRefreshStatus(message) {
   el.className = 'status good';
 }
 
-function scheduleAutoRefresh(delay = AUTO_REFRESH_MS) {
+function scheduleAutoRefresh(delay = autoRefreshMs || DEFAULT_AUTO_REFRESH_MS) {
   nextAutoRefreshAt = Date.now() + delay;
   updateAutoRefreshStatus();
 }
@@ -220,13 +354,14 @@ async function refreshCurrentAnalysis() {
   if (intradayPayload?.candles?.length >= 30) {
     intradayAnalysis = analyze(intradayPayload.candles, { mode: 'day' });
   }
-  renderAnalysis(symbol, dailyPayload, dailyAnalysis, intradayAnalysis, fundamentals, { skipNews: true });
-  await loadChartRange(priorRange);
+  renderAnalysis(symbol, dailyPayload, dailyAnalysis, intradayAnalysis, fundamentals, { skipNews: true, intradayPayload });
+  if (priorRange !== chartRange) await loadChartRange(priorRange);
 }
 
 async function autoRefreshNow(reason = 'auto') {
   if (!autoRefreshEnabled || autoRefreshBusy) return;
-  if (!marketIsOpen && reason === 'auto') {
+  await loadMarketSchedule();
+  if (!marketRefreshActive && reason === 'auto') {
     scheduleAutoRefresh();
     return;
   }
@@ -259,7 +394,7 @@ async function autoRefreshNow(reason = 'auto') {
 }
 
 setInterval(() => {
-  if (autoRefreshEnabled && marketIsOpen && Date.now() >= nextAutoRefreshAt) autoRefreshNow();
+  if (autoRefreshEnabled && marketRefreshActive && Date.now() >= nextAutoRefreshAt) autoRefreshNow();
   else updateAutoRefreshStatus();
 }, 1000);
 
@@ -627,7 +762,7 @@ async function checkAlert() {
     const baggerText = data.baggerCount
       ? `${data.baggerCount} bagger watch`
       : 'belum ada bagger watch kuat';
-    setText('alertStatus', `${scoreText}. ${harmonicText}. ${entryText}. ${baggerText}. Jadwal email: 00:00, 12:00, 15:40 WIB + realtime watch saat market.`);
+    setText('alertStatus', `${scoreText}. ${harmonicText}. ${entryText}. ${baggerText}. Jadwal email: menu pagi 00:00, siang 12:00, sore 15:40 WIB. Realtime watch hanya harmonic pattern saat market.`);
   } catch (err) {
     $('alertEmailStatus').textContent = 'Alert gagal dicek';
     $('alertEmailStatus').className = 'status bad';
@@ -642,7 +777,7 @@ async function sendAlertEmail() {
     $('alertEmailStatus').textContent = data.emailConfigured ? 'Email aktif' : 'Email env belum disetel';
     $('alertEmailStatus').className = `status ${data.emailConfigured ? 'good' : 'warn'}`;
     setText('alertStatus', data.email?.ok
-      ? `Email terkirim ke daftar penerima. ${data.count} kandidat, ${data.harmonicCount || 0} harmonic, ${data.swingEntryCount || 0} swing entry, dan ${data.baggerCount || 0} bagger watch masuk alert.`
+      ? `Email terkirim ke daftar penerima. ${data.count} kandidat menu, ${data.harmonicCount || 0} harmonic, ${data.swingEntryCount || 0} swing entry, dan ${data.baggerCount || 0} bagger watch masuk alert.`
       : data.email?.message || 'Tidak ada email dikirim.');
   } catch (err) {
     $('alertEmailStatus').textContent = 'Alert gagal dikirim';
@@ -761,6 +896,15 @@ function candleDateKey(candle) {
 
 function formatChartTick(time, range) {
   const date = chartDate(time);
+  if (range === 'live') {
+    return new Intl.DateTimeFormat('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(date);
+  }
+
   if (range === '1d') {
     return new Intl.DateTimeFormat('id-ID', {
       timeZone: 'Asia/Jakarta',
@@ -790,13 +934,14 @@ function setChartRangeActive(range) {
 
 function chartConfigFor(range) {
   return {
+    live: { interval: '5min', outputsize: 180, range: '5d', label: 'Live 5M - candle intraday', mode: 'day', intraday: true },
     '1d': { interval: '1day', outputsize: 5000, range: '20y', label: '1D - candle harian', mode: 'swing' },
     '1w': { interval: '1week', outputsize: 5000, range: '20y', label: '1W - candle mingguan', mode: 'swing' },
     '1mo': { interval: '1month', outputsize: 5000, range: '20y', label: '1Bln - candle bulanan', mode: 'swing' },
     '3mo': { interval: '1month', outputsize: 5000, range: '20y', label: '3Bln - candle 3 bulanan', mode: 'swing', aggregateMonths: 3 },
     '6mo': { interval: '1month', outputsize: 5000, range: '20y', label: '6Bln - candle 6 bulanan', mode: 'swing', aggregateMonths: 6 },
     '1y': { interval: '1month', outputsize: 5000, range: '20y', label: '1Th - candle tahunan', mode: 'swing', aggregateMonths: 12 }
-  }[range] || { interval: '1day', outputsize: 5000, range: '20y', label: '1D - candle harian', mode: 'swing' };
+  }[range] || { interval: '5min', outputsize: 180, range: '5d', label: 'Live 5M - candle intraday', mode: 'day', intraday: true };
 }
 
 function aggregateMonthlyCandles(candles, months) {
@@ -845,8 +990,21 @@ function analyzeForChart(candles, fallback, range) {
   }
 }
 
+function defaultChartRange() {
+  return marketRefreshActive && currentIntradayPayload?.candles?.length >= 30 ? 'live' : '1d';
+}
+
+function cachedChartCandles(range, dailyPayload = currentDailyPayload, intradayPayload = currentIntradayPayload) {
+  const cfg = chartConfigFor(range);
+  if (cfg.intraday && intradayPayload?.candles?.length) {
+    return intradayPayload.candles.slice(-cfg.outputsize);
+  }
+  return sliceChartCandles(dailyPayload?.candles || [], cfg);
+}
+
 function renderChart(candles, analysis, options = {}) {
   const range = options.range || chartRange;
+  const cfg = chartConfigFor(range);
   if (chart) chart.remove();
   chart = createChart($('chart'), {
     autoSize: true,
@@ -859,7 +1017,7 @@ function renderChart(candles, analysis, options = {}) {
     rightPriceScale: { borderColor: 'rgba(148,190,232,.24)' },
     timeScale: {
       borderColor: 'rgba(148,190,232,.24)',
-      timeVisible: false,
+      timeVisible: Boolean(cfg.intraday),
       secondsVisible: false,
       tickMarkFormatter: time => formatChartTick(time, range)
     }
@@ -935,14 +1093,21 @@ function renderChart(candles, analysis, options = {}) {
   chart.timeScale().fitContent();
 }
 
-function renderIndexChart(candles = []) {
+function renderIndexChart(candles = [], options = {}) {
+  const range = options.range || '1d';
+  const cfg = chartConfigFor(range);
   if (indexChart) indexChart.remove();
   indexChart = createChart($('ihsgChart'), {
     autoSize: true,
     layout: { background: { color: 'transparent' }, textColor: '#dbeafe' },
     grid: { vertLines: { color: 'rgba(148,190,232,.12)' }, horzLines: { color: 'rgba(148,190,232,.12)' } },
     rightPriceScale: { borderColor: 'rgba(148,190,232,.24)' },
-    timeScale: { borderColor: 'rgba(148,190,232,.24)' }
+    timeScale: {
+      borderColor: 'rgba(148,190,232,.24)',
+      timeVisible: Boolean(cfg.intraday),
+      secondsVisible: false,
+      tickMarkFormatter: time => formatChartTick(time, range)
+    }
   });
 
   const cs = indexChart.addSeries(CandlestickSeries, {
@@ -959,13 +1124,20 @@ function renderIndexChart(candles = []) {
 async function loadIHSG() {
   try {
     const data = await api.index();
-    renderIndexChart(data.candles || []);
+    if (data.marketSchedule) {
+      marketSchedule = data.marketSchedule;
+      marketScheduleLoadedAt = Date.now();
+    }
+    const range = data.chartMode === 'live' ? 'live' : '1d';
+    renderIndexChart(data.candles || [], { range });
     setText('ihsgLast', num(data.last?.close, 2));
     setText('ihsgChange', `${data.changePct >= 0 ? '+' : ''}${num(data.changePct, 2)}%`);
     $('ihsgChange').className = signalClass(data.changePct);
-    setText('ihsgMeta', `${data.provider} - ${data.dataStatus || 'delayed/eod'} - ${data.meta?.lastDataTime || 'waktu data tidak tersedia'}`);
-    $('ihsgStatus').textContent = 'IHSG aktif';
-    $('ihsgStatus').className = 'status good';
+    const liveLabel = data.chartMode === 'live' ? 'Live 5M' : data.chartMode === 'daily-fallback' ? 'Daily fallback' : 'Daily';
+    const phaseLabel = data.marketSchedule?.phaseLabel ? ` - ${data.marketSchedule.phaseLabel}` : '';
+    setText('ihsgMeta', `${liveLabel} - ${data.provider} - ${data.dataStatus || 'delayed/eod'} - ${data.meta?.lastDataTime || 'waktu data tidak tersedia'}${phaseLabel}`);
+    $('ihsgStatus').textContent = data.chartMode === 'live' ? 'IHSG live' : 'IHSG aktif';
+    $('ihsgStatus').className = `status ${data.chartMode === 'daily-fallback' ? 'warn' : 'good'}`;
   } catch (err) {
     $('ihsgStatus').textContent = 'IHSG gagal dimuat';
     $('ihsgStatus').className = 'status bad';
@@ -1018,6 +1190,19 @@ async function loadChartRange(range) {
 
   try {
     let payload;
+    if (cfg.intraday) {
+      payload = await api.series(currentSymbol, cfg.interval, cfg.outputsize, cfg.range);
+      currentIntradayPayload = payload;
+      currentIntradayAnalysis = payload.candles?.length >= 30 ? analyze(payload.candles, { mode: 'day' }) : null;
+      if (token !== chartLoadToken) return;
+
+      const chartAnalysis = currentIntradayAnalysis || analyzeForChart(payload.candles, currentDailyAnalysis, range);
+      const setup = currentIntradayAnalysis?.daySetup || current?.daySetup || currentDailyAnalysis.swingSetup;
+      renderChart(payload.candles, chartAnalysis, { range, setup });
+      setText('chartMeta', `${cfg.label} - ${payload.provider} - ${payload.meta?.lastDataTime || 'waktu data tidak tersedia'}`);
+      return;
+    }
+
     const canUseDailyCache = cfg.interval === '1day' && currentDailyPayload?.candles?.length >= Math.min(cfg.outputsize, 260) && !['5y', 'all'].includes(range);
     if (canUseDailyCache) {
       payload = { ...currentDailyPayload, candles: sliceChartCandles(currentDailyPayload.candles, cfg) };
@@ -1051,6 +1236,8 @@ function renderAnalysis(symbol, dailyPayload, analysis, intradayAnalysis, fundam
   currentSymbol = symbol;
   currentDailyPayload = dailyPayload;
   currentDailyAnalysis = a;
+  currentIntradayPayload = options.intradayPayload || null;
+  currentIntradayAnalysis = intradayAnalysis || null;
   const changeText = `${a.changePct >= 0 ? '+' : ''}${num(a.changePct, 2)}% dari candle sebelumnya`;
   const scoreClassName = statusClass(a.score);
 
@@ -1135,10 +1322,14 @@ function renderAnalysis(symbol, dailyPayload, analysis, intradayAnalysis, fundam
 
   renderCandlePatterns(a);
   renderEbookSignals(a);
-  chartRange = '1d';
+  chartRange = defaultChartRange();
   setChartRangeActive(chartRange);
-  renderChart(sliceChartCandles(dailyPayload.candles, chartConfigFor(chartRange)), a, { range: chartRange });
-  setText('chartMeta', `${chartConfigFor(chartRange).label} - ${dailyPayload.provider} - ${meta.lastDataTime || 'waktu data tidak tersedia'}`);
+  const initialCandles = cachedChartCandles(chartRange, dailyPayload, currentIntradayPayload);
+  const initialAnalysis = chartRange === 'live' && currentIntradayAnalysis ? currentIntradayAnalysis : a;
+  const initialSetup = chartRange === 'live' ? usedDay.daySetup : a.swingSetup;
+  const initialMeta = chartRange === 'live' ? currentIntradayPayload?.meta : meta;
+  renderChart(initialCandles, initialAnalysis, { range: chartRange, setup: initialSetup });
+  setText('chartMeta', `${chartConfigFor(chartRange).label} - ${(chartRange === 'live' ? currentIntradayPayload?.provider : dailyPayload.provider) || dailyPayload.provider} - ${initialMeta?.lastDataTime || 'waktu data tidak tersedia'}`);
   renderModePanel(current);
   if (!options.skipNews) loadNews(symbol);
 }
@@ -1162,7 +1353,7 @@ async function run(rawSymbol) {
     if (intradayPayload?.candles?.length >= 30) {
       intradayAnalysis = analyze(intradayPayload.candles, { mode: 'day' });
     }
-    renderAnalysis(symbol, dailyPayload, dailyAnalysis, intradayAnalysis, fundamentals);
+    renderAnalysis(symbol, dailyPayload, dailyAnalysis, intradayAnalysis, fundamentals, { intradayPayload });
     $('analysisPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {
     showError(err.message || 'Analisis gagal.');
@@ -1256,6 +1447,8 @@ $('calculateBtn').onclick = () => {
 };
 
 initAuth();
+loadMarketSchedule();
+setInterval(loadMarketSchedule, 30_000);
 checkStatus();
 loadScanner();
 loadIHSG();

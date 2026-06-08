@@ -11,6 +11,7 @@ Dashboard analisis saham berbasis HTML, CSS, Vanilla JavaScript, Vite, dan Netli
 - News feed dari RSS gratis dan deteksi kata kunci ekspansi/lapkeu.
 - Rasio valuasi/fundamental EPS, PER, PBV, ROE, dan DER dari scanner publik untuk validasi awal lapkeu.
 - Email alert otomatis via scheduled Netlify Function jika env email sudah diisi.
+- Grafik candlestick live intraday saat Sesi I/II IDX berjalan, lalu pause saat istirahat/tutup.
 - Grafik candlestick, volume, EMA20, stop loss, dan target.
 - RSI, MACD, ATR, relative volume, support, resistance, dan scoring swing.
 - Area entry, stop loss, target 1-2, serta kalkulator position sizing.
@@ -56,6 +57,7 @@ ALLOWED_ORIGIN=https://stock-santuy.netlify.app
 CACHE_TTL_QUOTE=60
 CACHE_TTL_INTRADAY=60
 CACHE_TTL_DAILY=3600
+LIVE_REFRESH_MS=60000
 
 RESEND_API_KEY=
 ALERT_EMAIL_TO=email_anda@example.com
@@ -63,12 +65,15 @@ ALERT_EMAIL_FROM=Stock Santuy <onboarding@resend.dev>
 ALERT_MIN_SCORE=78
 ALERT_MANUAL_SECRET=
 HARMONIC_ALERT_LOOKBACK=20
-HARMONIC_ALERT_RECENT_LOOKBACK=6
+HARMONIC_ALERT_RECENT_LOOKBACK=1
+WATCH_HARMONIC_COOLDOWN_HOURS=4
 IDX_HOLIDAYS=
 SITE_URL=https://stock-santuy.netlify.app
 ```
 
-Email alert memakai Resend API dari server-side Netlify Function. Jadwal Netlify memakai UTC: `signal-morning` berjalan 00:00 WIB untuk menu pagi, `signal-midday` 12:00 WIB, `signal-afternoon` 15:40 WIB, dan `signal-watch` tiap 5 menit sekitar jam market untuk harmonic/bagger/swing entry. Function akan skip email saat weekend atau tanggal libur nasional/cuti bersama dari API Hari Libur Indonesia. Untuk libur khusus BEI, isi `IDX_HOLIDAYS` dengan format `YYYY-MM-DD:Nama Libur`. Jika ingin sender domain sendiri, verifikasi domain di Resend lalu ganti `ALERT_EMAIL_FROM`.
+Email alert memakai Resend API dari server-side Netlify Function. Jadwal Netlify memakai UTC: `signal-morning` berjalan 00:00 WIB untuk menu pagi, `signal-midday` 12:00 WIB, `signal-afternoon` 15:40 WIB, dan `signal-watch` tiap 5 menit sekitar jam market. Menu pagi/siang/sore berisi rekomendasi sesuai sesi, sedangkan realtime watch hanya mengirim saham yang baru membentuk harmonic pattern intraday 15 menit. Sinyal watch yang sama masuk cooldown `WATCH_HARMONIC_COOLDOWN_HOURS` agar tidak mengirim saham yang sama berulang. Function akan skip email saat weekend atau tanggal libur nasional/cuti bersama dari API Hari Libur Indonesia, dan watch alert pause saat pasar reguler sedang istirahat atau tutup. Untuk libur khusus BEI, isi `IDX_HOLIDAYS` dengan format `YYYY-MM-DD:Nama Libur`. Jika ingin sender domain sendiri, verifikasi domain di Resend lalu ganti `ALERT_EMAIL_FROM`.
+
+Chart saham dan IHSG memakai endpoint `/api/market-schedule` untuk mengikuti jam pasar reguler IDX: Senin-Kamis Sesi I 09:00-12:00 dan Sesi II 13:30-15:49:59 WIB; Jumat Sesi I 09:00-11:30 dan Sesi II 14:00-15:49:59 WIB. Saat sesi aktif, chart memakai candle intraday 5 menit dan auto-refresh sesuai `LIVE_REFRESH_MS`/`CACHE_TTL_INTRADAY`; di luar sesi, status berubah pause dan chart tidak di-refresh otomatis.
 
 Untuk password login `stocksantuyanalisis`, `.env` lokal sudah berisi hash yang sesuai. Jika ingin membuat hash baru:
 ```bash
