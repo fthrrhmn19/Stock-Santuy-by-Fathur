@@ -642,6 +642,7 @@ input:focus {
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
@@ -1649,4 +1650,22 @@ footer {
   .ihsg-summary {
     justify-items: start;
   }
+}
+
+.nav-brand-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+.nav-logo {
+  height: 32px;
+  width: auto;
+  border-radius: 4px;
+}
+.login-logo {
+  height: 120px;
+  width: auto;
+  margin: 0 auto 15px;
+  display: block;
 }

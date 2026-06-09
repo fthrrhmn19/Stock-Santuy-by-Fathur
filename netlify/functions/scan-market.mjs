@@ -2,7 +2,7 @@ import { json } from './_shared/http.mjs';
 import { analyzeForScan } from './_shared/engine.mjs';
 import { yahooChart } from './_shared/yahoo.mjs';
 import { IDX_UNIVERSE } from './_shared/idx-universe.mjs';
-import { fetchSymbolExpansionNews } from './market-news.mjs';
+import { fetchSymbolExpansionNews, fetchGeneralFeeds } from './market-news.mjs';
 
 const PRIORITY_UNIVERSE = [
   'BBCA', 'BBRI', 'BMRI', 'BBNI', 'TLKM', 'ASII', 'UNVR', 'ICBP', 'INDF', 'AMRT',
@@ -312,9 +312,11 @@ const baggerCard = (item, meta = {}) => {
 };
 
 const enrichBaggersWithNews = async (baggers) => {
-  const enriched = await withLimit(baggers, 3, async (item) => {
+  const preFetchedGeneralNews = await fetchGeneralFeeds().catch(() => null);
+
+  const enriched = await withLimit(baggers, 8, async (item) => {
     try {
-      const news = await fetchSymbolExpansionNews(item.symbol);
+      const news = await fetchSymbolExpansionNews(item.symbol, preFetchedGeneralNews);
       const topHeadline = news.headlines[0];
       return {
         ...item,

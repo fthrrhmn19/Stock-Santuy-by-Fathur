@@ -73,18 +73,28 @@ const scoreNews = (item, activeSymbol) => {
  * Used by scan-market to enrich bagger cards with real headlines.
  * Returns { hasExpansionNews, headlines: [{ title, source, link, matchedKeywords }] }
  */
-export async function fetchSymbolExpansionNews(symbol) {
-  const feeds = [
-    { source: `Yahoo Finance ${symbol}`, url: `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(toYahooSymbol(symbol))}&region=US&lang=en-US` },
-    ...GENERAL_FEEDS
-  ];
-
+export async function fetchGeneralFeeds() {
   const batches = await Promise.allSettled(
-    feeds.map(feed => fetchRss(feed.url, feed.source).catch(() => []))
+    GENERAL_FEEDS.map(feed => fetchRss(feed.url, feed.source).catch(() => []))
   );
-  const allItems = uniqueByLink(
-    batches.flatMap(batch => batch.status === 'fulfilled' ? batch.value : [])
-  );
+  return uniqueByLink(batches.flatMap(batch => batch.status === 'fulfilled' ? batch.value : []));
+}
+
+export async function fetchSymbolExpansionNews(symbol, preFetchedGeneralNews = null) {
+  const yahooFeed = { source: `Yahoo Finance ${symbol}`, url: `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(toYahooSymbol(symbol))}&region=US&lang=en-US` };
+  
+  const batches = await Promise.allSettled([
+    fetchRss(yahooFeed.url, yahooFeed.source).catch(() => [])
+  ]);
+  const yahooItems = batches[0].status === 'fulfilled' ? batches[0].value : [];
+  
+  let allItems;
+  if (preFetchedGeneralNews) {
+    allItems = uniqueByLink([...yahooItems, ...preFetchedGeneralNews]);
+  } else {
+    const generalItems = await fetchGeneralFeeds();
+    allItems = uniqueByLink([...yahooItems, ...generalItems]);
+  }
 
   // Filter news that mention this symbol OR are from the symbol-specific Yahoo feed
   const symbolRegex = new RegExp(`[^A-Za-z0-9]${symbol}[^A-Za-z0-9]`, 'i');

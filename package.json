@@ -11,10 +11,11 @@
     "netlify:dev": "netlify dev"
   },
   "devDependencies": {
-    "vite": "^7.2.2",
-    "netlify-cli": "^23.8.1"
+    "netlify-cli": "^23.8.1",
+    "vite": "^7.2.2"
   },
   "dependencies": {
+    "jimp": "^1.6.1",
     "lightweight-charts": "^5.0.9"
   }
 }

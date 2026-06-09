@@ -1,4 +1,4 @@
-import { ema, rsi, atr, macd, relativeVolume, supportResistance, mean } from './indicators.js';
+import { ema, rsi, atr, macd, relativeVolume, supportResistance, mean, stochRsi, bollingerBands } from './indicators.js';
 import { evaluateEbookStrategies } from './ebook-rules.js';
 
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -21,7 +21,7 @@ function scoreLabel(score) {
   return 'AVOID';
 }
 
-function buildModeScore({ mode, last, e9, e20, e50, e200, r, m, rv, breakout, changePct, volatilityPct, ebook }) {
+function buildModeScore({ mode, last, e9, e20, e50, e200, r, m, rv, breakout, changePct, volatilityPct, ebook, stoch, bb }) {
   let score = 45;
   const reasons = [];
 
@@ -68,6 +68,26 @@ function buildModeScore({ mode, last, e9, e20, e50, e200, r, m, rv, breakout, ch
   if (breakout) {
     score += mode === 'day' ? 14 : 10;
     reasons.push('Harga menembus resistance terdekat.');
+  }
+
+  if (stoch && stoch.k != null && stoch.d != null) {
+    if (stoch.k > stoch.d && stoch.k < 30) {
+      score += mode === 'day' ? 12 : 8;
+      reasons.push('Stochastic RSI Golden Cross di area Oversold (momentum balik arah naik sangat kuat).');
+    } else if (stoch.k < stoch.d && stoch.k > 70) {
+      score -= 15;
+      reasons.push('Stochastic RSI Dead Cross di area Overbought (rawan koreksi/profit taking).');
+    }
+  }
+
+  if (bb) {
+    if (last.close > bb.upper && rv > 1.5) {
+      score += mode === 'day' ? 8 : 5;
+      reasons.push('Harga menembus Upper Bollinger Band disertai lonjakan volume (Volatilitas naik tajam).');
+    } else if (last.close < bb.lower) {
+      score -= 8;
+      reasons.push('Harga menjebol Lower Bollinger Band ke bawah (tekanan jual kuat).');
+    }
   }
 
   if (changePct > 0) score += mode === 'long' ? 3 : 8;
@@ -280,7 +300,10 @@ export function analyze(candles, options = {}) {
   ].filter(Number.isFinite).reduce((sum, value) => sum + value, 0);
   const fairGapPct = pct(last.close, technicalFairValue);
 
-  const scoreContext = { last, e9, e20, e50, e200, r, m, rv, breakout, changePct, volatilityPct, ebook };
+  const stoch = stochRsi(closes);
+  const bb = bollingerBands(closes);
+
+  const scoreContext = { last, e9, e20, e50, e200, r, m, rv, breakout, changePct, volatilityPct, ebook, stoch, bb };
   const day = buildModeScore({ mode: 'day', ...scoreContext });
   const swing = buildModeScore({ mode: 'swing', ...scoreContext });
   const long = buildModeScore({ mode: 'long', ...scoreContext });

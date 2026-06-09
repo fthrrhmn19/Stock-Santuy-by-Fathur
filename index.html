@@ -11,7 +11,7 @@
 <body>
   <div id="loginOverlay" class="login-overlay hidden" aria-hidden="true">
     <form id="loginForm" class="login-card">
-      <div class="brand-mark">SS</div>
+      <img src="/logo.png" alt="Stock Santuy Logo" class="login-logo" />
       <p class="eyebrow">PRIVATE DASHBOARD</p>
       <h1>Stock Santuy</h1>
       <p class="muted">Masukkan password akses untuk membuka dashboard.</p>
@@ -28,7 +28,10 @@
   <main class="shell">
     <header id="dashboard" class="hero-area">
       <nav class="topnav">
-        <a class="nav-brand" href="#dashboard">Stock Santuy</a>
+        <div class="nav-brand-container">
+          <img src="/logo.png" alt="Logo" class="nav-logo" />
+          <a class="nav-brand" href="#dashboard">Stock Santuy</a>
+        </div>
         <div class="nav-links">
           <a href="#quickSearch">Cari</a>
           <a href="#analysisPanel">Analisa</a>
@@ -420,16 +423,16 @@
           <h3>Valuasi & Fundamental</h3>
           <span id="fundamentalSource" class="source-badge">Proxy teknikal</span>
           <div class="metric-list fundamental-list">
-            <p><span>Fair value teknikal</span><strong id="fairValue">-</strong><small id="fairGap">-</small></p>
-            <p><span>Status valuasi</span><strong id="valuationStatus">-</strong><small id="valuationNote">Menunggu data.</small></p>
-            <p><span>Market cap</span><strong id="marketCapValue">-</strong><small id="marketCapNote">public stats</small></p>
-            <p><span>EPS TTM</span><strong id="epsValue">-</strong><small id="epsNote">butuh lapkeu</small></p>
-            <p><span>PER</span><strong id="perValue">-</strong><small id="perNote">harga / EPS</small></p>
-            <p><span>PBV</span><strong id="pbvValue">-</strong><small id="pbvNote">price to book</small></p>
-            <p><span>ROE</span><strong id="roeValue">-</strong><small id="roeNote">return on equity</small></p>
-            <p><span>DER</span><strong id="derValue">-</strong><small id="derNote">liabilitas / ekuitas</small></p>
-            <p><span>Trading value</span><strong id="turnoverValue">-</strong><small id="turnoverNote">nilai transaksi</small></p>
-            <p><span>Volume / lot</span><strong id="lotValue">-</strong><small id="volumeValue">-</small></p>
+            <p title="Perkiraan harga wajar berdasarkan indikator teknikal (bukan fundamental murni)"><span>Fair value teknikal</span><strong id="fairValue">-</strong><small id="fairGap">-</small></p>
+            <p title="Penilaian apakah saham overvalued (kemahalan) atau undervalued (diskon)"><span>Status valuasi</span><strong id="valuationStatus">-</strong><small id="valuationNote">Menunggu data.</small></p>
+            <p title="Kapitalisasi pasar (Total nilai saham perusahaan)"><span>Market cap</span><strong id="marketCapValue">-</strong><small id="marketCapNote">public stats</small></p>
+            <p title="Earning Per Share (Laba bersih per lembar saham dalam 12 bulan terakhir)"><span>EPS TTM</span><strong id="epsValue">-</strong><small id="epsNote">butuh lapkeu</small></p>
+            <p title="Price to Earning Ratio (Harga saham dibagi EPS, makin kecil makin murah secara historis)"><span>PER</span><strong id="perValue">-</strong><small id="perNote">harga / EPS</small></p>
+            <p title="Price to Book Value (Harga saham dibagi nilai buku ekuitas)"><span>PBV</span><strong id="pbvValue">-</strong><small id="pbvNote">price to book</small></p>
+            <p title="Return on Equity (Tingkat keuntungan yang dihasilkan dari modal bersih perusahaan)"><span>ROE</span><strong id="roeValue">-</strong><small id="roeNote">return on equity</small></p>
+            <p title="Debt to Equity Ratio (Rasio utang terhadap modal, makin kecil makin aman)"><span>DER</span><strong id="derValue">-</strong><small id="derNote">liabilitas / ekuitas</small></p>
+            <p title="Total nilai transaksi rupiah yang terjadi hari ini"><span>Trading value</span><strong id="turnoverValue">-</strong><small id="turnoverNote">nilai transaksi</small></p>
+            <p title="Total volume lot yang diperdagangkan"><span>Volume / lot</span><strong id="lotValue">-</strong><small id="volumeValue">-</small></p>
             <p><span>Average price</span><strong id="averagePriceValue">-</strong><small id="iepValue">IEP -</small></p>
             <p><span>Data confidence</span><strong id="fundamentalConfidence">-</strong><small id="fundamentalNote">Menunggu data.</small></p>
           </div>

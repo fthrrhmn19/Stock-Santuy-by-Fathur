@@ -411,31 +411,30 @@ function stockCard(item, kind) {
       `<a class="expansion-headline" href="${esc(h.link)}" target="_blank" rel="noopener noreferrer" title="${esc(h.source)}">${esc((h.title || '').slice(0, 80))}${(h.title || '').length > 80 ? '...' : ''}</a>`
     ).join('');
     validasiHtml = `
-      <div class="row expansion-row"><dt>Validasi</dt><dd>
+      <div class="row expansion-row" title="Validasi ganda: mendeteksi otomatis berita aksi korporasi (ekspansi/laba) dan mengonfirmasi fase tren teknikal (Stage Analysis)."><dt>Validasi</dt><dd>
         <span class="expansion-badge ${badgeClass}">${badgeIcon} ${badgeLabel}</span>
       </dd></div>
       <div class="expansion-detail">
-        ${headlineLinks || `<span class="muted">${proxyText}</span>`}
+        ${headlineLinks || `<span class="muted" title="Stage 1: Akumulasi di bawah | Stage 2: Uptrend (Paling ideal) | Stage 3: Distribusi di pucuk | Stage 4: Downtrend (Hindari)">${proxyText}</span>`}
       </div>
     `;
   }
   return `
     <article class="panel stock-card">
       <div class="stock-card-head">
-        <h3>${esc(item.symbol)}</h3>
-        <span class="status ${labelClass}">${esc(item.label)}</span>
+        <h3 title="Kode Saham">${esc(item.symbol)}</h3>
+        <span class="status ${labelClass}" title="Status kelayakan saham ini berdasarkan perpaduan indikator teknikal">${esc(item.label)}</span>
       </div>
       <dl>
-        <div class="row"><dt>Score</dt><dd>${num(item.score, 0)}</dd></div>
-        <div class="row"><dt>Trend</dt><dd>${esc(item.trend)}</dd></div>
-        <div class="row"><dt>RSI</dt><dd>${num(item.rsi, 2)}</dd></div>
+        <div class="row" title="Skor teknikal gabungan dari 0-100 (makin tinggi makin ideal)"><dt>Score</dt><dd>${num(item.score, 0)}</dd></div>
+        <div class="row" title="Tren pergerakan harga saat ini berdasarkan pola EMA (Uptrend/Downtrend/Sideways)"><dt>Trend</dt><dd>${esc(item.trend)}</dd></div>
+        <div class="row" title="Relative Strength Index: Momentum harga, di atas 50 berarti uptrend, di atas 70 overbought (jenuh beli)"><dt>RSI</dt><dd>${num(item.rsi, 2)}</dd></div>
         <div class="row"><dt>Harga</dt><dd>${rupiah(item.price)}</dd></div>
-        <div class="row"><dt>Volume</dt><dd>${esc(item.statusVolume)}</dd></div>
+        <div class="row" title="Kondisi volume transaksi saat ini dibandingkan rata-rata (Volume Spike = lonjakan besar)"><dt>Volume</dt><dd>${esc(item.statusVolume)}</dd></div>
         ${validasiHtml}
       </dl>
       <div class="stock-card-actions">
         <button class="primary" type="button" data-analyze="${esc(item.symbol)}" data-kind="${kind}">Analisa</button>
-        ${kind === 'bagger' ? `<button class="ghost mini" type="button" data-news-symbol="${esc(item.symbol)}">Lihat News</button>` : ''}
       </div>
     </article>
   `;
@@ -846,10 +845,10 @@ function renderCandlePatterns(analysis) {
   `).join('') : '<p class="muted">Belum ada harmonic pattern valid di swing terbaru.</p>';
 }
 
-function ebookCard(title, label, detail, source, score) {
+function ebookCard(title, label, detail, source, score, tooltip) {
   const cls = statusClass(score);
   return `
-    <article class="ebook-card ${cls}">
+    <article class="ebook-card ${cls}" title="${esc(tooltip || '')}">
       <span>${esc(title)}</span>
       <strong>${esc(label)}</strong>
       <small>${esc(detail)}</small>
@@ -884,10 +883,10 @@ function renderEbookSignals(analysis) {
     : ebook.boxer.contractionBeforeBreakout ? 'Ada low-volume ebb, tunggu breakout.' : 'Belum ada price-volume surge.';
 
   $('ebookSignalGrid').innerHTML = [
-    ebookCard('Volume Price Analysis', ebook.vpa.label, vpaDetail, ebook.vpa.source, ebook.vpa.score),
-    ebookCard('Weinstein Stage', ebook.stage.stage, ebook.stage.reason, ebook.stage.source, ebook.stage.score),
-    ebookCard('Minervini Trend Template', `${ebook.minervini.passed}/${ebook.minervini.total} kriteria`, minerviniDetail, ebook.minervini.source, ebook.minervini.score),
-    ebookCard('Boxer Day/Swing', ebook.boxer.label, boxerDetail, ebook.boxer.source, ebook.boxer.score)
+    ebookCard('Volume Price Analysis', ebook.vpa.label, vpaDetail, ebook.vpa.source, ebook.vpa.score, 'Membaca korelasi antara pergerakan harga dan volume. Jika harga naik tapi volume turun, itu anomali (bearish). Jika harga naik diikuti volume tinggi, itu validasi (bullish).'),
+    ebookCard('Weinstein Stage', ebook.stage.stage, ebook.stage.reason, ebook.stage.source, ebook.stage.score, 'Membaca fase siklus harga. Stage 1: Sideways bawah, Stage 2: Uptrend (Ideal), Stage 3: Sideways atas, Stage 4: Downtrend (Hindari).'),
+    ebookCard('Minervini Trend Template', `${ebook.minervini.passed}/${ebook.minervini.total} kriteria`, minerviniDetail, ebook.minervini.source, ebook.minervini.score, '7 kriteria teknikal super ketat ala Mark Minervini untuk memastikan saham benar-benar dalam uptrend super kuat sebelum kita melakukan entry breakout.'),
+    ebookCard('Boxer Day/Swing', ebook.boxer.label, boxerDetail, ebook.boxer.source, ebook.boxer.score, 'Mendeteksi ledakan volume mendadak (Price-Volume Surge) yang biasanya mendahului lonjakan harga jangka pendek (Day Trade/Swing cepat).')
   ].join('');
 
   $('ebookDataNeeds').innerHTML = (ebook.fundamentalGaps || []).map(item => `
