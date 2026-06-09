@@ -5,13 +5,32 @@ import { IDX_UNIVERSE } from './_shared/idx-universe.mjs';
 
 const GENERAL_FEEDS = [
   { source: 'CNBC Indonesia Market', url: 'https://www.cnbcindonesia.com/market/rss' },
-  { source: 'IDXChannel', url: 'https://www.idxchannel.com/rss' }
+  { source: 'IDXChannel', url: 'https://www.idxchannel.com/rss' },
+  { source: 'IDNFinancials', url: 'https://www.idnfinancials.com/rss' },
+  { source: 'Bisnis.com Market', url: 'https://market.bisnis.com/rss' },
+  { source: 'Kontan Investasi', url: 'https://investasi.kontan.co.id/rss/' }
 ];
 
-const EXPANSION_KEYWORDS = [
+export const EXPANSION_KEYWORDS = [
   'ekspansi', 'capex', 'belanja modal', 'akuisisi', 'pabrik', 'proyek', 'kontrak',
   'laporan keuangan', 'lapkeu', 'laba', 'pendapatan', 'revenue', 'growth', 'rights issue',
-  'merger', 'investasi', 'dividen', 'kinerja'
+  'merger', 'investasi', 'dividen', 'kinerja',
+  'corporate action', 'aksi korporasi', 'divestasi', 'joint venture',
+  'right issue', 'buyback', 'tender offer', 'ipo anak',
+  'pabrik baru', 'pembangunan', 'konstruksi', 'kontrak baru',
+  'ekspor', 'pasar baru', 'laba bersih', 'laba naik', 'laba meningkat', 'laba tumbuh',
+  'pendapatan naik', 'pendapatan meningkat', 'pendapatan tumbuh',
+  'revenue naik', 'revenue meningkat', 'revenue tumbuh',
+  'pertumbuhan laba', 'pertumbuhan pendapatan',
+  'rekor laba', 'rekor pendapatan', 'cetak laba',
+  'akuisisi saham', 'beli saham', 'mengakuisisi',
+  'pembangunan pabrik', 'rencana ekspansi', 'rencana investasi',
+  'emisi saham', 'stock split', 'bonus saham',
+  'kenaikan laba', 'kenaikan pendapatan',
+  'margin meningkat', 'margin naik',
+  'order baru', 'kontrak kerja', 'kerja sama',
+  'tambang baru', 'smelter', 'hilirisasi',
+  'listing', 'ipo', 'go public'
 ];
 
 const uniqueByLink = items => {
@@ -48,6 +67,60 @@ const scoreNews = (item, activeSymbol) => {
     matchedKeywords: matched.slice(0, 4)
   };
 };
+
+/**
+ * Fetch expansion/corporate news specifically for a single symbol.
+ * Used by scan-market to enrich bagger cards with real headlines.
+ * Returns { hasExpansionNews, headlines: [{ title, source, link, matchedKeywords }] }
+ */
+export async function fetchSymbolExpansionNews(symbol) {
+  const feeds = [
+    { source: `Yahoo Finance ${symbol}`, url: `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(toYahooSymbol(symbol))}&region=US&lang=en-US` },
+    ...GENERAL_FEEDS
+  ];
+
+  const batches = await Promise.allSettled(
+    feeds.map(feed => fetchRss(feed.url, feed.source).catch(() => []))
+  );
+  const allItems = uniqueByLink(
+    batches.flatMap(batch => batch.status === 'fulfilled' ? batch.value : [])
+  );
+
+  // Filter news that mention this symbol OR are from the symbol-specific Yahoo feed
+  const symbolRegex = new RegExp(`[^A-Za-z0-9]${symbol}[^A-Za-z0-9]`, 'i');
+  const relevant = allItems.filter(item => {
+    const text = ` ${item.title || ''} ${item.summary || ''} `;
+    const isYahooFeed = String(item.source || '').includes(`Yahoo Finance ${symbol}`);
+    return isYahooFeed || symbolRegex.test(text);
+  });
+
+  // Score for expansion keywords
+  const scored = relevant.map(item => {
+    const text = `${item.title} ${item.summary}`.toLowerCase();
+    const matched = EXPANSION_KEYWORDS.filter(kw => text.includes(kw));
+    return { ...item, matchedKeywords: matched, expansionSignal: matched.length > 0 };
+  });
+
+  // Prioritize expansion news first, then any relevant news
+  const sorted = scored.sort((a, b) =>
+    Number(b.expansionSignal) - Number(a.expansionSignal) ||
+    b.matchedKeywords.length - a.matchedKeywords.length
+  );
+
+  const headlines = sorted.slice(0, 3).map(item => ({
+    title: item.title,
+    source: item.source,
+    link: item.link,
+    matchedKeywords: item.matchedKeywords.slice(0, 3),
+    expansionSignal: item.expansionSignal
+  }));
+
+  return {
+    hasExpansionNews: headlines.some(h => h.expansionSignal),
+    hasAnyNews: headlines.length > 0,
+    headlines
+  };
+}
 
 export default async req => {
   try {

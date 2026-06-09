@@ -2,6 +2,7 @@ import { json } from './_shared/http.mjs';
 import { analyzeForScan } from './_shared/engine.mjs';
 import { yahooChart } from './_shared/yahoo.mjs';
 import { IDX_UNIVERSE } from './_shared/idx-universe.mjs';
+import { fetchSymbolExpansionNews } from './market-news.mjs';
 
 const PRIORITY_UNIVERSE = [
   'BBCA', 'BBRI', 'BMRI', 'BBNI', 'TLKM', 'ASII', 'UNVR', 'ICBP', 'INDF', 'AMRT',
@@ -303,10 +304,36 @@ const baggerCard = (item, meta = {}) => {
     ...card(item.symbol, item.investment, meta),
     score,
     label: score >= 82 ? 'Potential Bagger' : score >= 70 ? 'Bagger Watch' : 'Monitor',
-    expansionProxy: score >= 70
-      ? `Butuh validasi news/lapkeu ekspansi; ${item.investment.ebook?.stage?.stage || 'stage belum kuat'}`
-      : 'Belum kuat'
+    stage: item.investment.ebook?.stage?.stage || 'stage belum kuat',
+    expansionValidated: false,
+    expansionNews: [],
+    expansionProxy: 'Mencari berita korporasi...'
   };
+};
+
+const enrichBaggersWithNews = async (baggers) => {
+  const enriched = await withLimit(baggers, 3, async (item) => {
+    try {
+      const news = await fetchSymbolExpansionNews(item.symbol);
+      const topHeadline = news.headlines[0];
+      return {
+        ...item,
+        expansionValidated: news.hasExpansionNews,
+        expansionNews: news.headlines,
+        expansionProxy: news.hasExpansionNews
+          ? topHeadline.title
+          : news.hasAnyNews
+            ? topHeadline.title
+            : `Belum ada berita; ${item.stage}`
+      };
+    } catch {
+      return {
+        ...item,
+        expansionProxy: `Berita gagal dimuat; ${item.stage}`
+      };
+    }
+  });
+  return enriched;
 };
 
 export default async () => {
@@ -335,10 +362,11 @@ export default async () => {
       .map(item => card(item.symbol, item.investment, item.meta))
       .sort((a, b) => b.score - a.score || b.rvol - a.rvol)
       .slice(0, 20);
-    const bagger = daily
+    const baggerRaw = daily
       .map(item => baggerCard(item, item.meta))
       .sort((a, b) => b.score - a.score || b.rvol - a.rvol)
       .slice(0, 16);
+    const bagger = await enrichBaggersWithNews(baggerRaw);
     const swing = daily
       .map(item => card(item.symbol, item.swing, item.meta))
       .sort((a, b) => b.score - a.score || b.changePct - a.changePct)

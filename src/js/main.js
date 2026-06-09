@@ -399,6 +399,26 @@ setInterval(() => {
 
 function stockCard(item, kind) {
   const labelClass = statusClass(item.score);
+  let validasiHtml = '';
+  if (kind === 'bagger') {
+    const hasNews = item.expansionNews?.length > 0;
+    const validated = item.expansionValidated;
+    const badgeClass = validated ? 'expansion-validated' : hasNews ? 'expansion-news' : 'expansion-pending';
+    const badgeIcon = validated ? '✓' : hasNews ? '📰' : '⏳';
+    const badgeLabel = validated ? 'Katalis ditemukan' : hasNews ? 'Ada berita' : 'Belum ada berita';
+    const proxyText = esc(item.expansionProxy || 'Menunggu data...');
+    const headlineLinks = (item.expansionNews || []).slice(0, 2).map(h =>
+      `<a class="expansion-headline" href="${esc(h.link)}" target="_blank" rel="noopener noreferrer" title="${esc(h.source)}">${esc((h.title || '').slice(0, 80))}${(h.title || '').length > 80 ? '...' : ''}</a>`
+    ).join('');
+    validasiHtml = `
+      <div class="row expansion-row"><dt>Validasi</dt><dd>
+        <span class="expansion-badge ${badgeClass}">${badgeIcon} ${badgeLabel}</span>
+      </dd></div>
+      <div class="expansion-detail">
+        ${headlineLinks || `<span class="muted">${proxyText}</span>`}
+      </div>
+    `;
+  }
   return `
     <article class="panel stock-card">
       <div class="stock-card-head">
@@ -411,9 +431,12 @@ function stockCard(item, kind) {
         <div class="row"><dt>RSI</dt><dd>${num(item.rsi, 2)}</dd></div>
         <div class="row"><dt>Harga</dt><dd>${rupiah(item.price)}</dd></div>
         <div class="row"><dt>Volume</dt><dd>${esc(item.statusVolume)}</dd></div>
-        ${kind === 'bagger' ? `<div class="row"><dt>Validasi</dt><dd>${esc(item.expansionProxy || 'Lapkeu/news')}</dd></div>` : ''}
+        ${validasiHtml}
       </dl>
-      <button class="primary" type="button" data-analyze="${esc(item.symbol)}" data-kind="${kind}">Analisa</button>
+      <div class="stock-card-actions">
+        <button class="primary" type="button" data-analyze="${esc(item.symbol)}" data-kind="${kind}">Analisa</button>
+        ${kind === 'bagger' ? `<button class="ghost mini" type="button" data-news-symbol="${esc(item.symbol)}">Lihat News</button>` : ''}
+      </div>
     </article>
   `;
 }
@@ -421,6 +444,13 @@ function stockCard(item, kind) {
 function wireAnalyzeButtons(root = document) {
   root.querySelectorAll('[data-analyze]').forEach(button => {
     button.onclick = () => run(button.dataset.analyze);
+  });
+  root.querySelectorAll('[data-news-symbol]').forEach(button => {
+    button.onclick = () => {
+      const symbol = button.dataset.newsSymbol;
+      loadNews(symbol);
+      document.getElementById('newsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
   });
 }
 
