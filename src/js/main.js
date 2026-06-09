@@ -1,6 +1,7 @@
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, createSeriesMarkers } from 'lightweight-charts';
 import { api } from './api.js';
 import { analyze } from './analysis.js';
+import { calculateValuationScenarios } from './valuation.js';
 
 const $ = id => document.getElementById(id);
 let current = null;
@@ -755,7 +756,7 @@ function renderNewsItems(targetId, items) {
       <div class="news-symbols">
         ${(item.symbols || []).length ? item.symbols.map(symbol => `<b>${esc(symbol)}</b>`).join('') : '<b>MARKET</b>'}
       </div>
-      <span>${esc(item.source)}${item.expansionSignal ? ' - ekspansi/lapkeu' : ''}</span>
+      <span>${esc(item.source)}${item.expansionSignal && item.matchedKeywords?.length ? ' - ' + item.matchedKeywords.join(', ').toUpperCase() : ''}</span>
       <a href="${esc(item.link)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a>
       <p>${esc(item.summary || '').slice(0, 150)}</p>
     </article>
@@ -855,6 +856,12 @@ function ebookCard(title, label, detail, source, score, tooltip) {
       <small class="ebook-source">${esc(source)}</small>
     </article>
   `;
+}
+
+function renderFundamentals(analysis) {
+  $('epsValue').textContent = analysis.ebook?.fundamentalGaps?.length ? '?' : 'Tersedia';
+  $('btnValuationDetail').style.display = 'block';
+  $('btnValuationDetail').onclick = () => openValuationModal(analysis.last.symbol || $('symbolInput').value);
 }
 
 function renderEbookSignals(analysis) {
@@ -1206,6 +1213,14 @@ function renderFundamentalStats(stats, analysis) {
   setText('iepValue', Number.isFinite(stats?.iep) ? `IEP ${rupiah(stats.iep)}` : 'IEP -');
   setText('fundamentalConfidence', hasStats ? `${stats.confidenceScore}/100` : 'Proxy');
   setText('fundamentalNote', hasStats ? `${stats.confidenceLabel} - ${stats.provider}` : 'Data fundamental publik belum tersedia.');
+
+  // Valuation Button Logic
+  const symbol = analysis?.last?.symbol || document.getElementById('symbolInput').value;
+  const btn = document.getElementById('btnValuationDetail');
+  if (btn) {
+    btn.style.display = 'block';
+    btn.onclick = () => openValuationModal(symbol);
+  }
 }
 
 async function loadChartRange(range) {
@@ -1473,6 +1488,76 @@ $('calculateBtn').onclick = () => {
   const cost = lots * 100 * current.swingSetup.aggressiveEntry;
   $('positionResult').innerHTML = `Risiko maksimal <strong>${rupiah(maxRisk)}</strong>. Estimasi maksimal <strong>${lots} lot</strong>. Nilai pembelian sekitar <strong>${rupiah(cost)}</strong>.`;
 };
+
+// Valuation Modal Logic
+$('closeValuationModal').onclick = () => {
+  $('valuationModal').style.display = 'none';
+};
+
+window.onclick = (event) => {
+  if (event.target == $('valuationModal')) {
+    $('valuationModal').style.display = 'none';
+  }
+};
+
+async function openValuationModal(symbol) {
+  $('valuationModal').style.display = 'block';
+  $('valuationLoading').style.display = 'flex';
+  $('valuationError').style.display = 'none';
+  $('valuationContent').style.display = 'none';
+
+  try {
+    const res = await api.valuation(symbol);
+    if (res.error) throw new Error(res.error);
+    
+    const valuation = calculateValuationScenarios(res);
+    
+    // Populate UI
+    $('valCurrentPrice').textContent = rupiah(valuation.price);
+    $('valComposite').textContent = rupiah(valuation.composite);
+    $('valSafePrice').textContent = rupiah(valuation.safeBuyPrice);
+    $('valUpside').textContent = valuation.upside.toFixed(2) + '%';
+    
+    $('valStatus').textContent = valuation.status;
+    $('valStatus').className = `status-badge ${valuation.upside > 10 ? 'success' : valuation.upside < -10 ? 'danger' : 'neutral'}`;
+    
+    $('valMos').textContent = `MoS ${valuation.marginOfSafety.toFixed(0)}%`;
+    $('valConfidence').textContent = `Confidence: ${valuation.confidence}`;
+    
+    // Scenarios
+    const maxVal = Math.max(valuation.scenarios.bull.fairValue, valuation.price, valuation.composite) * 1.2;
+    
+    ['bear', 'base', 'bull'].forEach(scenario => {
+      const v = valuation.scenarios[scenario].fairValue;
+      $(`val${scenario.charAt(0).toUpperCase() + scenario.slice(1)}`).textContent = rupiah(v);
+      $(`bar${scenario.charAt(0).toUpperCase() + scenario.slice(1)}`).style.width = Math.min((v / maxVal) * 100, 100) + '%';
+    });
+    
+    // Assumptions
+    const asm = valuation.scenarios.base.assumptions;
+    $('asGrowth').textContent = asm.growthRate;
+    $('asDiscount').textContent = asm.discountRate;
+    $('asTerminal').textContent = asm.terminalGrowth;
+    $('asPer').textContent = asm.targetPer;
+    $('asPbv').textContent = asm.targetPbv;
+    
+    // Methods Table
+    $('valMethodsTable').innerHTML = valuation.scenarios.base.methods.map(m => `
+      <tr>
+        <td>${m.name}</td>
+        <td><strong>${rupiah(m.value)}</strong></td>
+        <td>${m.weight}%</td>
+      </tr>
+    `).join('');
+    
+    $('valuationLoading').style.display = 'none';
+    $('valuationContent').style.display = 'block';
+  } catch (err) {
+    $('valuationLoading').style.display = 'none';
+    $('valuationError').style.display = 'block';
+    $('valuationErrorText').textContent = err.message;
+  }
+}
 
 initAuth();
 loadMarketSchedule();

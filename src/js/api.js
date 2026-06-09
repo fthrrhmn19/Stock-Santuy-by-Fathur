@@ -11,6 +11,7 @@ export const api = {
   scan: () => request('/api/scan-market'),
   index: () => request('/api/market-index'),
   fundamentals: symbol => request(`/api/fundamentals?symbol=${encodeURIComponent(symbol || '')}`),
+  valuation: symbol => request(`/api/valuation?symbol=${encodeURIComponent(symbol || '')}`),
   news: symbol => request(`/api/market-news?symbol=${encodeURIComponent(symbol || '')}`),
   alertCheck: () => request('/api/alert-status'),
   alertSend: () =>

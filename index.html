@@ -436,6 +436,7 @@
             <p><span>Average price</span><strong id="averagePriceValue">-</strong><small id="iepValue">IEP -</small></p>
             <p><span>Data confidence</span><strong id="fundamentalConfidence">-</strong><small id="fundamentalNote">Menunggu data.</small></p>
           </div>
+          <button id="btnValuationDetail" class="btn btn-primary" style="width: 100%; margin-top: 1rem; display: none;">Cek Detail Valuasi Asli</button>
         </article>
       </section>
 
@@ -525,6 +526,100 @@
     </footer>
   </main>
 
-  <script type="module" src="/src/js/main.js"></script>
+  <div id="valuationModal" class="modal">
+    <div class="modal-content valuation-modal">
+      <div class="modal-header">
+        <h2>Detail Fair Value Saham</h2>
+        <button id="closeValuationModal" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="valuationLoading" class="loading-state">
+          <div class="spinner"></div>
+          <p>Menganalisis laporan keuangan dan valuasi sektoral...</p>
+        </div>
+        <div id="valuationError" class="error-state" style="display: none;">
+          <p id="valuationErrorText"></p>
+        </div>
+        <div id="valuationContent" style="display: none;">
+          <div class="valuation-summary-cards">
+            <div class="v-card">
+              <span title="Harga Saham Saat Ini">Harga Saat Ini</span>
+              <strong id="valCurrentPrice">-</strong>
+            </div>
+            <div class="v-card highlight">
+              <span title="Kombinasi bobot dari berbagai metode valuasi">Fair Value Gabungan</span>
+              <strong id="valComposite">-</strong>
+              <small id="valStatus" class="status-badge">-</small>
+            </div>
+            <div class="v-card">
+              <span title="Harga beli aman setelah dipotong Margin of Safety">Harga Beli Aman</span>
+              <strong id="valSafePrice">-</strong>
+              <small id="valMos">-</small>
+            </div>
+            <div class="v-card">
+              <span title="Potensi kenaikan atau penurunan harga menuju Fair Value">Potensi Upside</span>
+              <strong id="valUpside">-</strong>
+              <small id="valConfidence">-</small>
+            </div>
+          </div>
+          
+          <div class="valuation-grid">
+            <div class="v-panel">
+              <h3>Skenario Valuasi</h3>
+              <div class="scenario-bars">
+                <div class="s-bar">
+                  <label>Bear Case</label>
+                  <div class="bar-track"><div id="barBear" class="bar-fill bear"></div></div>
+                  <span id="valBear">-</span>
+                </div>
+                <div class="s-bar">
+                  <label>Base Case</label>
+                  <div class="bar-track"><div id="barBase" class="bar-fill base"></div></div>
+                  <span id="valBase">-</span>
+                </div>
+                <div class="s-bar">
+                  <label>Bull Case</label>
+                  <div class="bar-track"><div id="barBull" class="bar-fill bull"></div></div>
+                  <span id="valBull">-</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="v-panel">
+              <h3>Metode Valuasi (Base Case)</h3>
+              <table class="v-table">
+                <thead>
+                  <tr>
+                    <th>Metode</th>
+                    <th>Fair Value</th>
+                    <th>Bobot</th>
+                  </tr>
+                </thead>
+                <tbody id="valMethodsTable">
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="v-panel mt-1">
+            <h3>Asumsi (Base Case)</h3>
+            <div class="assumptions-grid">
+              <p><span title="Estimasi pertumbuhan laba atau pendapatan">Growth Rate:</span> <strong id="asGrowth">-</strong></p>
+              <p><span title="Tingkat diskonto atau WACC untuk menghitung nilai kini">Discount Rate:</span> <strong id="asDiscount">-</strong></p>
+              <p><span title="Pertumbuhan stabil jangka panjang (Terminal Growth)">Terminal Growth:</span> <strong id="asTerminal">-</strong></p>
+              <p><span title="Target wajar Price to Earning Ratio">Target PER:</span> <strong id="asPer">-</strong></p>
+              <p><span title="Target wajar Price to Book Value">Target PBV:</span> <strong id="asPbv">-</strong></p>
+            </div>
+          </div>
+
+          <p class="valuation-disclaimer">
+            <small><strong>Disclaimer:</strong> Fair value ini dihitung berdasarkan kombinasi DCF, PER, PBV, dan model lainnya sesuai sektor. Hasil ini merupakan estimasi matematis berdasarkan laporan keuangan historis dan asumsi pertumbuhan, bukan jaminan pasti harga saham akan mencapai nilai tersebut.</small>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/js/main.js" type="module"></script>
 </body>
 </html>
