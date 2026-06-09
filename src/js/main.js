@@ -1517,7 +1517,10 @@ async function openValuationModal(symbol) {
     $('valCurrentPrice').textContent = rupiah(valuation.price);
     $('valComposite').textContent = rupiah(valuation.composite);
     $('valSafePrice').textContent = rupiah(valuation.safeBuyPrice);
-    $('valUpside').textContent = valuation.upside.toFixed(2) + '%';
+    
+    const up = valuation.upside;
+    $('valUpside').textContent = `${up >= 0 ? '+' : ''}${up.toFixed(2)}%`;
+    $('valUpside').style.color = up >= 0 ? 'var(--success)' : 'var(--danger)';
     
     $('valStatus').textContent = valuation.status;
     $('valStatus').className = `status-badge ${valuation.upside > 10 ? 'success' : valuation.upside < -10 ? 'danger' : 'neutral'}`;
