@@ -1190,7 +1190,8 @@ function renderFundamentalStats(stats, analysis) {
   $('valuationBadge').className = `source-badge ${valuation.className}`;
 
   setText('fairValue', rupiah(analysis.fairValue));
-  setText('fairGap', `${analysis.fairGapPct >= 0 ? '+' : ''}${num(analysis.fairGapPct, 2)}% vs harga saat ini`);
+  const upsidePct = analysis?.last?.close ? ((analysis.fairValue - analysis.last.close) / analysis.last.close) * 100 : 0;
+  setText('fairGap', `Potensi ${upsidePct >= 0 ? 'upside +' : ''}${num(upsidePct, 2)}% dari harga saat ini`);
   setText('valuationStatus', valuation.status);
   setText('valuationNote', valuation.note);
   setText('marketCapValue', compactRp(stats?.marketCap));
