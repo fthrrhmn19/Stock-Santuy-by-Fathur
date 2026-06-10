@@ -1,3 +1,17 @@
 name = "stock-santuy"
 pages_build_output_dir = "dist"
 compatibility_flags = ["nodejs_compat"]
+
+[vars]
+MARKET_DATA_PROVIDER = "twelvedata"
+ENABLE_YAHOO_FALLBACK = "true"
+CACHE_TTL_QUOTE = "60"
+CACHE_TTL_INTRADAY = "60"
+CACHE_TTL_DAILY = "3600"
+ALERT_MIN_SCORE = "78"
+HARMONIC_ALERT_LOOKBACK = "20"
+HARMONIC_ALERT_RECENT_LOOKBACK = "1"
+WATCH_HARMONIC_COOLDOWN_HOURS = "4"
+SITE_URL = "https://stock-santuy.pages.dev"
+ALLOWED_ORIGIN = "https://stock-santuy.pages.dev"
+
