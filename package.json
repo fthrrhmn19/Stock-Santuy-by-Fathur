@@ -3,6 +3,14 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "browser": {
+    "child_process": false,
+    "net": false,
+    "tls": false,
+    "fs": false,
+    "os": false,
+    "dns": false
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
