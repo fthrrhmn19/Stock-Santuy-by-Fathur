@@ -17,16 +17,16 @@ jobs:
     steps:
       - name: Ping Signal Morning
         if: github.event.schedule == '0 17 * * 0-4'
-        run: curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-morning
+        run: 'curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-morning'
 
       - name: Ping Signal Midday
         if: github.event.schedule == '0 5 * * 1-5'
-        run: curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-midday
+        run: 'curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-midday'
 
       - name: Ping Signal Afternoon
         if: github.event.schedule == '40 8 * * 1-5'
-        run: curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-afternoon
+        run: 'curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-afternoon'
 
       - name: Ping Signal Watch
         if: github.event.schedule == '*/5 2-8 * * 1-5'
-        run: curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-watch
+        run: 'curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-watch'
