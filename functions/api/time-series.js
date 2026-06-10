@@ -1,6 +1,6 @@
-import { json, cleanSymbol } from './_shared/http.mjs';
-import { hasTwelveDataKey, twelve } from './_shared/twelve.mjs';
-import { hasYahooFallback, yahooChart } from './_shared/yahoo.mjs';
+import { json, cleanSymbol } from './_shared/http.js';
+import { hasTwelveDataKey, twelve } from './_shared/twelve.js';
+import { hasYahooFallback, yahooChart } from './_shared/yahoo.js';
 
 const ttlFor = interval => {
   const key = interval === '1day' ? 'CACHE_TTL_DAILY' : 'CACHE_TTL_INTRADAY';
@@ -9,7 +9,10 @@ const ttlFor = interval => {
   return interval === '1day' ? 3600 : 60;
 };
 
-export default async req => {
+export async function onRequest(context) {
+  const req = context.request;
+  const env = context.env;
+  globalThis.process = { env: { ...(globalThis.process ? globalThis.process.env : {}), ...env } };
   try {
     const provider = (process.env.MARKET_DATA_PROVIDER || 'twelvedata').toLowerCase();
 

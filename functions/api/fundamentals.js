@@ -1,4 +1,4 @@
-import { json, cleanSymbol } from './_shared/http.mjs';
+import { json, cleanSymbol } from './_shared/http.js';
 
 const parseCompact = value => {
   const match = String(value || '').trim().replace(/,/g, '').match(/^([+-]?\d+(?:\.\d+)?)([KMBT])?$/i);
@@ -127,7 +127,10 @@ const fetchTradingViewFundamentals = async symbol => {
   }
 };
 
-export default async req => {
+export async function onRequest(context) {
+  const req = context.request;
+  const env = context.env;
+  globalThis.process = { env: { ...(globalThis.process ? globalThis.process.env : {}), ...env } };
   try {
     const u = new URL(req.url);
     const symbol = cleanSymbol(u.searchParams.get('symbol'));

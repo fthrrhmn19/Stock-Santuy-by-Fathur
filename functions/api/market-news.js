@@ -1,7 +1,7 @@
-import { json, cleanSymbol } from './_shared/http.mjs';
-import { fetchRss } from './_shared/rss.mjs';
-import { toYahooSymbol } from './_shared/yahoo.mjs';
-import { IDX_UNIVERSE } from './_shared/idx-universe.mjs';
+import { json, cleanSymbol } from './_shared/http.js';
+import { fetchRss } from './_shared/rss.js';
+import { toYahooSymbol } from './_shared/yahoo.js';
+import { IDX_UNIVERSE } from './_shared/idx-universe.js';
 
 const GENERAL_FEEDS = [
   { source: 'CNBC Indonesia Market', url: 'https://www.cnbcindonesia.com/market/rss' },
@@ -132,7 +132,10 @@ export async function fetchSymbolExpansionNews(symbol, preFetchedGeneralNews = n
   };
 }
 
-export default async req => {
+export async function onRequest(context) {
+  const req = context.request;
+  const env = context.env;
+  globalThis.process = { env: { ...(globalThis.process ? globalThis.process.env : {}), ...env } };
   try {
     const u = new URL(req.url);
     const symbol = cleanSymbol(u.searchParams.get('symbol'));

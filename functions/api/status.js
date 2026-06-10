@@ -1,8 +1,11 @@
-import { json } from './_shared/http.mjs';
-import { hasTwelveDataKey } from './_shared/twelve.mjs';
-import { hasYahooFallback } from './_shared/yahoo.mjs';
+import { json } from './_shared/http.js';
+import { hasTwelveDataKey } from './_shared/twelve.js';
+import { hasYahooFallback } from './_shared/yahoo.js';
 
-export default async () => {
+export async function onRequest(context) {
+  const req = context.request;
+  const env = context.env;
+  globalThis.process = { env: { ...(globalThis.process ? globalThis.process.env : {}), ...env } };
   const provider = (process.env.MARKET_DATA_PROVIDER || 'twelvedata').toLowerCase();
   const twelveReady = provider === 'twelvedata' && hasTwelveDataKey();
   const yahooReady = hasYahooFallback();

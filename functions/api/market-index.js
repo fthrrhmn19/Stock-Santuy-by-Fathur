@@ -1,8 +1,11 @@
-import { json } from './_shared/http.mjs';
-import { yahooChart } from './_shared/yahoo.mjs';
-import { idxMarketSchedule } from './_shared/market-calendar.mjs';
+import { json } from './_shared/http.js';
+import { yahooChart } from './_shared/yahoo.js';
+import { idxMarketSchedule } from './_shared/market-calendar.js';
 
-export default async () => {
+export async function onRequest(context) {
+  const req = context.request;
+  const env = context.env;
+  globalThis.process = { env: { ...(globalThis.process ? globalThis.process.env : {}), ...env } };
   try {
     const marketSchedule = await idxMarketSchedule();
     const liveOptions = { interval: '5min', outputsize: 180, range: '5d' };

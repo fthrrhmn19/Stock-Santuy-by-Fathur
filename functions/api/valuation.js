@@ -1,11 +1,14 @@
 import YahooFinance from 'yahoo-finance2';
-import { toYahooSymbol } from './_shared/yahoo.mjs';
+import { toYahooSymbol } from './_shared/yahoo.js';
 
 const yahooFinance = new YahooFinance();
 
 const cache = new Map();
 
-export default async (request, context) => {
+export async function onRequest(context) {
+  const request = context.request;
+  const env = context.env;
+  globalThis.process = { env: { ...(globalThis.process ? globalThis.process.env : {}), ...env } };
   const url = new URL(request.url);
   const symbolParam = url.searchParams.get('symbol');
   if (!symbolParam) {

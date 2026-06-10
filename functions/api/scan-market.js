@@ -1,8 +1,8 @@
-import { json } from './_shared/http.mjs';
-import { analyzeForScan } from './_shared/engine.mjs';
-import { yahooChart } from './_shared/yahoo.mjs';
-import { IDX_UNIVERSE } from './_shared/idx-universe.mjs';
-import { fetchSymbolExpansionNews, fetchGeneralFeeds } from './market-news.mjs';
+import { json } from './_shared/http.js';
+import { analyzeForScan } from './_shared/engine.js';
+import { yahooChart } from './_shared/yahoo.js';
+import { IDX_UNIVERSE } from './_shared/idx-universe.js';
+import { fetchSymbolExpansionNews, fetchGeneralFeeds } from './market-news.js';
 
 const PRIORITY_UNIVERSE = [
   'BBCA', 'BBRI', 'BMRI', 'BBNI', 'TLKM', 'ASII', 'UNVR', 'ICBP', 'INDF', 'AMRT',
@@ -338,7 +338,10 @@ const enrichBaggersWithNews = async (baggers) => {
   return enriched;
 };
 
-export default async () => {
+export async function onRequest(context) {
+  const req = context.request;
+  const env = context.env;
+  globalThis.process = { env: { ...(globalThis.process ? globalThis.process.env : {}), ...env } };
   try {
     const tradingViewMoversPromise = fetchTradingViewMarketMovers().catch(() => null);
     const daily = await withLimit(UNIVERSE, 10, async symbol => {

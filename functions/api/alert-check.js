@@ -1,12 +1,12 @@
-import { json } from './_shared/http.mjs';
-import { sendEmail, emailConfigured } from './_shared/email.mjs';
-import { yahooChart } from './_shared/yahoo.mjs';
-import { idxMarketSchedule } from './_shared/market-calendar.mjs';
-import scanMarket from './scan-market.mjs';
+import { json } from './_shared/http.js';
+import { sendEmail, emailConfigured } from './_shared/email.js';
+import { yahooChart } from './_shared/yahoo.js';
+import { idxMarketSchedule } from './_shared/market-calendar.js';
+import scanMarket from './scan-market.js';
 import { analyze } from '../../src/js/analysis.js';
 
 const minScore = () => Number(process.env.ALERT_MIN_SCORE || 78);
-const siteUrl = () => process.env.SITE_URL || process.env.URL || 'https://stock-santuy.netlify.app';
+const siteUrl = () => process.env.SITE_URL || process.env.URL || 'https://stock-santuy.pages.dev';
 const harmonicLookback = session =>
   Number(session.key === 'watch'
     ? (process.env.HARMONIC_ALERT_RECENT_LOOKBACK || 1)
@@ -397,7 +397,10 @@ const emailText = ({ session, picks, harmonicAlerts, baggerAlerts, swingEntryAle
   ].join('\n');
 };
 
-export default async req => {
+export async function onRequest(context) {
+  const req = context.request;
+  const env = context.env;
+  globalThis.process = { env: { ...(globalThis.process ? globalThis.process.env : {}), ...env } };
   try {
     const u = new URL(req.url);
     const session = sessionFor(u);

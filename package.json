@@ -6,13 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "test": "node tools/test_analysis.mjs",
-    "netlify:dev": "netlify dev"
+    "preview": "wrangler pages dev dist",
+    "test": "node tools/test_analysis.mjs"
   },
   "devDependencies": {
-    "netlify-cli": "^23.8.1",
-    "vite": "^7.2.2"
+    "vite": "^7.2.2",
+    "wrangler": "^3.0.0"
   },
   "dependencies": {
     "jimp": "^1.6.1",
