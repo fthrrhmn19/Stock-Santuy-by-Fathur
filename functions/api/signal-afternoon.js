@@ -1,4 +1,4 @@
-import alertCheck from './alert-check.js';
+import { onRequest as alertCheck } from './alert-check.js';
 
 export async function onRequest(context) {
   const req = context.request;
@@ -7,5 +7,5 @@ export async function onRequest(context) {
   const url = new URL(req.url);
   url.pathname = '/api/alert-check';
   url.searchParams.set('session', 'afternoon');
-  return alertCheck(new Request(url, { method: req.method, headers: req.headers }));
+  return alertCheck({ request: new Request(url, { method: req.method, headers: req.headers }), env: context.env });
 };
