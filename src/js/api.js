@@ -1,6 +1,14 @@
 async function request(path) {
   const res = await fetch(path, { headers: { Accept: 'application/json' } });
-  const data = await res.json().catch(() => ({}));
+  let data;
+  try {
+    data = await res.json();
+  } catch (err) {
+    if (res.headers.get('content-type')?.includes('text/html')) {
+      throw new Error(`API Backend tidak berjalan. Pastikan Anda mengakses URL Cloudflare Live, bukan Localhost Vite.`);
+    }
+    throw new Error('Gagal membaca respons dari server (Bukan JSON).');
+  }
   if (!res.ok) throw new Error(data.message || `Request gagal (${res.status})`);
   return data;
 }
@@ -31,7 +39,15 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password })
     }).then(async r => {
-      const d = await r.json();
+      let d;
+      try {
+        d = await r.json();
+      } catch (err) {
+        if (r.headers.get('content-type')?.includes('text/html')) {
+          throw new Error(`Anda sedang menjalankan web secara Lokal. Backend Login hanya bekerja di URL Cloudflare Live.`);
+        }
+        throw new Error('Gagal membaca respons login dari server (Bukan JSON).');
+      }
       if (!r.ok) throw new Error(d.message || 'Login gagal');
       return d;
     }),
