@@ -81,17 +81,15 @@ export async function fetchGeneralFeeds() {
 }
 
 export async function fetchSymbolExpansionNews(symbol, preFetchedGeneralNews = null) {
-  const yahooFeed = { source: `Yahoo Finance ${symbol}`, url: `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(toYahooSymbol(symbol))}&region=US&lang=en-US` };
-  
-  const batches = await Promise.allSettled([
-    fetchRss(yahooFeed.url, yahooFeed.source).catch(() => [])
-  ]);
-  const yahooItems = batches[0].status === 'fulfilled' ? batches[0].value : [];
-  
   let allItems;
   if (preFetchedGeneralNews) {
-    allItems = uniqueByLink([...yahooItems, ...preFetchedGeneralNews]);
+    allItems = uniqueByLink([...preFetchedGeneralNews]);
   } else {
+    const yahooFeed = { source: `Yahoo Finance ${symbol}`, url: `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(toYahooSymbol(symbol))}&region=US&lang=en-US` };
+    const batches = await Promise.allSettled([
+      fetchRss(yahooFeed.url, yahooFeed.source).catch(() => [])
+    ]);
+    const yahooItems = batches[0].status === 'fulfilled' ? batches[0].value : [];
     const generalItems = await fetchGeneralFeeds();
     allItems = uniqueByLink([...yahooItems, ...generalItems]);
   }

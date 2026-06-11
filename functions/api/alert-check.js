@@ -114,7 +114,7 @@ const uniqueSymbols = scan => {
     ...(scan.market?.topValue || []).slice(0, 6),
     ...(scan.market?.topVolume || []).slice(0, 6)
   ].map(item => item.symbol).filter(Boolean);
-  return [...new Set(symbols)].slice(0, 8);
+  return [...new Set(symbols)].slice(0, 6);
 };
 
 const withLimit = async (items, limit, task) => {
@@ -201,9 +201,9 @@ const findSwingEntryAlerts = async scan => {
     ...(scan.swing || []).slice(0, 8).map(item => item.symbol),
     ...(scan.market?.topGainer || []).slice(0, 3).map(item => item.symbol),
     ...(scan.market?.volumeSpike || []).slice(0, 3).map(item => item.symbol)
-  ].filter(Boolean))].slice(0, 5);
+  ].filter(Boolean))].slice(0, 4);
 
-  const alerts = await withLimit(symbols, 5, async symbol => {
+  const alerts = await withLimit(symbols, 4, async symbol => {
     const payload = await yahooChart(symbol, { interval: '1day', outputsize: 320 });
     const analysis = analyze(payload.candles, { mode: 'swing' });
     const setup = analysis.swingSetup;
