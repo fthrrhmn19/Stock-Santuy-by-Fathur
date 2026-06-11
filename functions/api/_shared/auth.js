@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 
 const COOKIE_NAME = 'stock_santuy_session';
 const LEGACY_PASSWORD = process.env.ACCESS_PASSWORD;
-const PASSWORD_HASH = process.env.LOGIN_PASSWORD_HASH || process.env.ACCESS_PASSWORD_HASH || "pbkdf2_sha256$100000$c6a7680a26611699e88c0830bc05231e$9c004638ba1310d52885aece3d401c7a4c6ccf8db9c65f7e596742abf9dc4050";
+const PASSWORD_HASH = process.env.LOGIN_PASSWORD_HASH || process.env.ACCESS_PASSWORD_HASH || "pbkdf2_sha256$10000$c6a7680a26611699e88c0830bc05231e$3f5746d5b2b9b050a3637cf04e2493f4c91ca30f39604690099bc0834134dda7";
 const SESSION_SECRET = process.env.SESSION_SECRET || 'stock_santuy_super_secret_session_key_2026';
 
 const safeEqual = (a, b) => {
@@ -19,7 +19,7 @@ const safeEqualHex = (a, b) => {
 const verifyPbkdf2 = (password, configured) => {
   const [, iterations, salt, expected] = String(configured).split('$');
   const rounds = Number(iterations);
-  if (!Number.isInteger(rounds) || rounds < 100000 || !salt || !expected) return false;
+  if (!Number.isInteger(rounds) || rounds < 10000 || !salt || !expected) return false;
   const actual = crypto.pbkdf2Sync(String(password || ''), salt, rounds, 32, 'sha256').toString('hex');
   return safeEqualHex(actual, expected);
 };
