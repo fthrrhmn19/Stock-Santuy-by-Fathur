@@ -15,4 +15,6 @@ HARMONIC_ALERT_RECENT_LOOKBACK = "1"
 WATCH_HARMONIC_COOLDOWN_HOURS = "4"
 SITE_URL = "https://stock-santuy-cloudflare.pages.dev"
 ALLOWED_ORIGIN = "https://stock-santuy-cloudflare.pages.dev"
-
+LOGIN_PASSWORD_HASH = "pbkdf2_sha256$210000$06e849e5eccdaffb23fdf500b0426fa9$784693ae3a78bf0d903bbee813acbb28bf4d7536eb55ff1e7b4c91fe2facb079"
+SESSION_SECRET = "stock_santuy_super_secret_session_key_2026"
+SCAN_MARKET_LIMIT = "25"

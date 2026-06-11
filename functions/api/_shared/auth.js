@@ -2,8 +2,8 @@ import crypto from 'node:crypto';
 
 const COOKIE_NAME = 'stock_santuy_session';
 const LEGACY_PASSWORD = process.env.ACCESS_PASSWORD;
-const PASSWORD_HASH = process.env.ACCESS_PASSWORD_HASH;
-const SESSION_SECRET = process.env.SESSION_SECRET || 'change-me';
+const PASSWORD_HASH = process.env.LOGIN_PASSWORD_HASH || process.env.ACCESS_PASSWORD_HASH || "pbkdf2_sha256$210000$06e849e5eccdaffb23fdf500b0426fa9$784693ae3a78bf0d903bbee813acbb28bf4d7536eb55ff1e7b4c91fe2facb079";
+const SESSION_SECRET = process.env.SESSION_SECRET || 'stock_santuy_super_secret_session_key_2026';
 
 const safeEqual = (a, b) => {
   const left = Buffer.from(String(a || ''));

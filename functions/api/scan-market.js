@@ -18,7 +18,7 @@ const MARKET_MOVER_EXTRA = [
   'BLES', 'APLI', 'ASPR', 'ISEA', 'FORU'
 ];
 
-const baseLimit = Number(process.env.SCAN_MARKET_LIMIT || 35);
+const baseLimit = Number(process.env.SCAN_MARKET_LIMIT || 20);
 const UNIVERSE = [...new Set([...PRIORITY_UNIVERSE, ...MARKET_MOVER_EXTRA, ...IDX_UNIVERSE])];
 
 const LIQUID_INTRADAY = UNIVERSE.slice(0, 80);
@@ -348,7 +348,7 @@ export async function onRequest(context) {
   const intradayLimit = (qIntradayLimit > 0) ? qIntradayLimit : 10;
   
   // Hard cap to prevent Cloudflare Worker 503 limit
-  const maxSafeScan = Math.min(scanLimit, 35);
+  const maxSafeScan = Math.min(scanLimit, 20);
   const maxSafeIntraday = Math.min(intradayLimit, 10);
 
   const targetUniverse = UNIVERSE.slice(0, maxSafeScan);
