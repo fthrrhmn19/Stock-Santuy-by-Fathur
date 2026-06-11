@@ -257,14 +257,7 @@ const buildFallbackMarketMovers = async daily => {
     .filter(item => item.changePct < 0)
     .sort((a, b) => a.changePct - b.changePct)
     .slice(0, 10);
-  const enrichmentCandidates = bySymbol([
-    ...[...movers].sort((a, b) => b.value - a.value).slice(0, 40),
-    ...[...movers].sort((a, b) => b.volume - a.volume).slice(0, 40)
-  ]);
-  const enriched = await enrichMarketItems(enrichmentCandidates);
-  const enrichedBySymbol = new Map(movers.map(item => [item.symbol, { ...item, lot: item.volume / 100 }]));
-  enriched.forEach(item => enrichedBySymbol.set(item.symbol, item));
-  const enrichedMovers = [...enrichedBySymbol.values()];
+  const enrichedMovers = [...movers].map(item => ({ ...item, lot: item.volume / 100 }));
   const topValue = [...enrichedMovers]
     .filter(item => Number.isFinite(item.value))
     .sort((a, b) => (b.value || 0) - (a.value || 0))
