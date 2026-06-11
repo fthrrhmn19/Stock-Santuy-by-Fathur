@@ -6,7 +6,7 @@ import { onRequest as scanMarket } from './scan-market.js';
 import { analyze } from '../../src/js/analysis.js';
 
 const minScore = () => Number(process.env.ALERT_MIN_SCORE || 78);
-const siteUrl = () => process.env.SITE_URL || process.env.URL || 'https://stock-santuy.pages.dev';
+const siteUrl = () => process.env.SITE_URL || process.env.URL || 'https://stock-santuy-cloudflare.pages.dev';
 const harmonicLookback = session =>
   Number(session.key === 'watch'
     ? (process.env.HARMONIC_ALERT_RECENT_LOOKBACK || 1)

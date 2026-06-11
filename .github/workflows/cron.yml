@@ -10,23 +10,72 @@ on:
     - cron: '40 8 * * 1-5'
     # Every 5 min from 09:00 to 15:55 WIB Mon-Fri (02:00 to 08:55 UTC Mon-Fri)
     - cron: '*/5 2-8 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      session:
+        description: 'Session to trigger (morning/midday/afternoon/watch)'
+        required: false
+        default: ''
+
+env:
+  SITE_URL: https://stock-santuy-cloudflare.pages.dev
 
 jobs:
   ping_endpoints:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Signal Morning
-        if: github.event.schedule == '0 17 * * 0-4'
-        run: 'curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-morning'
+        if: github.event.schedule == '0 17 * * 0-4' || github.event.inputs.session == 'morning'
+        run: |
+          echo "⏰ Triggering signal-morning..."
+          HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            -X POST \
+            -H "X-NF-Event: schedule" \
+            --retry 2 --retry-delay 5 --max-time 120 \
+            "$SITE_URL/api/signal-morning")
+          echo "HTTP Status: $HTTP_CODE"
+          cat /tmp/response.txt | head -c 500
+          echo ""
+          if [ "$HTTP_CODE" -ge 500 ]; then echo "::error::Server error $HTTP_CODE"; exit 1; fi
 
       - name: Ping Signal Midday
-        if: github.event.schedule == '0 5 * * 1-5'
-        run: 'curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-midday'
+        if: github.event.schedule == '0 5 * * 1-5' || github.event.inputs.session == 'midday'
+        run: |
+          echo "☀️ Triggering signal-midday..."
+          HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            -X POST \
+            -H "X-NF-Event: schedule" \
+            --retry 2 --retry-delay 5 --max-time 120 \
+            "$SITE_URL/api/signal-midday")
+          echo "HTTP Status: $HTTP_CODE"
+          cat /tmp/response.txt | head -c 500
+          echo ""
+          if [ "$HTTP_CODE" -ge 500 ]; then echo "::error::Server error $HTTP_CODE"; exit 1; fi
 
       - name: Ping Signal Afternoon
-        if: github.event.schedule == '40 8 * * 1-5'
-        run: 'curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-afternoon'
+        if: github.event.schedule == '40 8 * * 1-5' || github.event.inputs.session == 'afternoon'
+        run: |
+          echo "🌅 Triggering signal-afternoon..."
+          HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            -X POST \
+            -H "X-NF-Event: schedule" \
+            --retry 2 --retry-delay 5 --max-time 120 \
+            "$SITE_URL/api/signal-afternoon")
+          echo "HTTP Status: $HTTP_CODE"
+          cat /tmp/response.txt | head -c 500
+          echo ""
+          if [ "$HTTP_CODE" -ge 500 ]; then echo "::error::Server error $HTTP_CODE"; exit 1; fi
 
       - name: Ping Signal Watch
-        if: github.event.schedule == '*/5 2-8 * * 1-5'
-        run: 'curl -s -X POST -H "X-NF-Event: schedule" https://stock-santuy.pages.dev/api/signal-watch'
+        if: github.event.schedule == '*/5 2-8 * * 1-5' || github.event.inputs.session == 'watch'
+        run: |
+          echo "👁️ Triggering signal-watch..."
+          HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            -X POST \
+            -H "X-NF-Event: schedule" \
+            --retry 2 --retry-delay 5 --max-time 120 \
+            "$SITE_URL/api/signal-watch")
+          echo "HTTP Status: $HTTP_CODE"
+          cat /tmp/response.txt | head -c 500
+          echo ""
+          if [ "$HTTP_CODE" -ge 500 ]; then echo "::error::Server error $HTTP_CODE"; exit 1; fi

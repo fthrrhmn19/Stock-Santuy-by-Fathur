@@ -13,6 +13,6 @@ ALERT_MIN_SCORE = "78"
 HARMONIC_ALERT_LOOKBACK = "20"
 HARMONIC_ALERT_RECENT_LOOKBACK = "1"
 WATCH_HARMONIC_COOLDOWN_HOURS = "4"
-SITE_URL = "https://stock-santuy.pages.dev"
-ALLOWED_ORIGIN = "https://stock-santuy.pages.dev"
+SITE_URL = "https://stock-santuy-cloudflare.pages.dev"
+ALLOWED_ORIGIN = "https://stock-santuy-cloudflare.pages.dev"
 
