@@ -791,7 +791,7 @@ async function checkAlert() {
     const baggerText = data.baggerCount
       ? `${data.baggerCount} bagger watch`
       : 'belum ada bagger watch kuat';
-    setText('alertStatus', `${scoreText}. ${harmonicText}. ${entryText}. ${baggerText}. Jadwal email: menu pagi 00:00, siang 12:00, sore 15:40 WIB. Realtime watch hanya harmonic pattern saat market.`);
+    setText('alertStatus', `${scoreText}. ${harmonicText}. ${entryText}. ${baggerText}. Jadwal Email: Pagi (00:00), Siang (12:00), Sore (15:40) WIB. Realtime Sniper siaga memantau Harmonic Pattern & Swing Entry (notif instan tanpa nunggu jadwal) 🚀`);
   } catch (err) {
     $('alertEmailStatus').textContent = 'Alert gagal dicek';
     $('alertEmailStatus').className = 'status bad';
