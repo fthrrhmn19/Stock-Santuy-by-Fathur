@@ -2,7 +2,7 @@ import { json } from './_shared/http.js';
 import { sendEmail, emailConfigured } from './_shared/email.js';
 import { yahooChart } from './_shared/yahoo.js';
 import { idxMarketSchedule } from './_shared/market-calendar.js';
-
+import { onRequest as scanMarket } from './scan-market.js';
 import { analyze } from '../../src/js/analysis.js';
 
 const minScore = () => Number(process.env.ALERT_MIN_SCORE || 78);
@@ -473,7 +473,7 @@ export async function onRequest(context) {
     const watchSession = session.key === 'watch';
     const scanLimit = 15;
     const scanIntradayLimit = 5;
-    const res = await fetch(`${siteUrl()}/api/scan-market?limit=${scanLimit}&intradayLimit=${scanIntradayLimit}`);
+    const res = await scanMarket({ request: new Request(`${siteUrl()}/api/scan-market?limit=${scanLimit}&intradayLimit=${scanIntradayLimit}`), env: context.env });
     const scan = await res.json();
     
     let harmonicAlerts = [];
