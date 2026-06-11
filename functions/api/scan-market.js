@@ -334,11 +334,11 @@ export async function onRequest(context) {
   const env = context.env;
   globalThis.process = { env: { ...(globalThis.process ? globalThis.process.env : {}), ...env } };
   const u = new URL(req.url);
-  const qLimit = Number(u.searchParams.get('limit'));
-  const qIntradayLimit = Number(u.searchParams.get('intradayLimit'));
+  const qLimit = u.searchParams.get('limit');
+  const qIntradayLimit = u.searchParams.get('intradayLimit');
   
-  const scanLimit = (qLimit > 0) ? qLimit : baseLimit;
-  const intradayLimit = (qIntradayLimit > 0) ? qIntradayLimit : 10;
+  const scanLimit = qLimit !== null ? Number(qLimit) : baseLimit;
+  const intradayLimit = qIntradayLimit !== null ? Number(qIntradayLimit) : 10;
   
   // Hard cap to prevent Cloudflare Worker 503 limit
   const maxSafeScan = Math.min(scanLimit, 20);
