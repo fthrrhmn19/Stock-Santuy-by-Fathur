@@ -1,3 +1,5 @@
-import alertCheck from './alert-check.js';
+import { onRequest as alertCheck } from './alert-check.js';
 
-export default async req => alertCheck(req);
+export async function onRequest(context) {
+  return alertCheck(context);
+};
