@@ -8,7 +8,7 @@ export const hasTwelveDataKey = () => {
 
 export async function twelve(endpoint, params = {}) {
   const key = String(process.env.TWELVE_DATA_API_KEY || '').trim();
-  if (!hasTwelveDataKey()) throw new Error('TWELVE_DATA_API_KEY belum disetel di Netlify.');
+  if (!hasTwelveDataKey()) throw new Error('TWELVE_DATA_API_KEY belum disetel di Cloudflare.');
 
   const url = new URL(`${BASE}/${endpoint}`);
   Object.entries({ ...params, apikey: key }).forEach(([k, v]) => url.searchParams.set(k, String(v)));

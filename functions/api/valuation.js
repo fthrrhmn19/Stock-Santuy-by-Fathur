@@ -1,33 +1,46 @@
-import { toYahooSymbol } from './_shared/yahoo.js';
-
-const UA = 'Mozilla/5.0 StockSantuy/1.0';
 const cache = new Map();
 
-async function fetchQuoteSummary(symbol, modules) {
-  const url = new URL(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}`);
-  url.searchParams.set('modules', modules.join(','));
+const TV_COLUMNS = [
+  'description', 'close', 'sector', 'industry', 
+  'price_earnings_ttm', 'price_book_ratio', 'earnings_per_share_basic_ttm',
+  'return_on_equity', 'return_on_assets', 'total_debt', 'total_revenue', 'net_income',
+  'total_shares_outstanding_fundamental', 'cash_n_short_term_invest', 'dividend_yield_recent',
+  'enterprise_value_ebitda_ttm', 'price_sales_ratio', 'net_margin', 'free_cash_flow'
+];
 
+async function fetchTradingViewFundamentals(symbol) {
+  const cleanSymbol = symbol.replace('.JK', '').toUpperCase();
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 14000);
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  
   try {
-    const res = await fetch(url.toString(), {
+    const res = await fetch('https://scanner.tradingview.com/indonesia/scan', {
+      method: 'POST',
       signal: ctrl.signal,
-      headers: { 'User-Agent': UA, Accept: 'application/json' }
+      headers: {
+        'User-Agent': 'Mozilla/5.0 StockSantuy/1.0',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Origin': 'https://www.tradingview.com',
+        'Referer': 'https://www.tradingview.com/'
+      },
+      body: JSON.stringify({
+        symbols: { tickers: [`IDX:${cleanSymbol}`] },
+        columns: TV_COLUMNS
+      })
     });
+    
     const data = await res.json();
-    if (!res.ok || data.quoteSummary?.error) {
-      throw new Error(data.quoteSummary?.error?.description || `Yahoo Finance error ${res.status}`);
-    }
-    const result = data.quoteSummary?.result?.[0];
-    if (!result) throw new Error('Tidak ada data dari Yahoo Finance.');
-    return result;
+    if (!res.ok) throw new Error(data?.error || `TradingView error ${res.status}`);
+    
+    const row = data?.data?.[0]?.d;
+    if (!row) throw new Error('Data saham tidak ditemukan di TradingView.');
+    
+    return { symbol: cleanSymbol, row };
   } finally {
     clearTimeout(timer);
   }
 }
-
-// Yahoo v10 returns nested { raw, fmt } objects — extract raw value
-const raw = v => (v && typeof v === 'object' && 'raw' in v) ? v.raw : (typeof v === 'number' ? v : null);
 
 export async function onRequest(context) {
   const request = context.request;
@@ -35,15 +48,16 @@ export async function onRequest(context) {
   globalThis.process = { env: { ...(globalThis.process ? globalThis.process.env : {}), ...env } };
   const url = new URL(request.url);
   const symbolParam = url.searchParams.get('symbol');
+  
   if (!symbolParam) {
     return new Response(JSON.stringify({ error: 'Ticker wajib diisi' }), { status: 400 });
   }
 
-  const symbol = toYahooSymbol(symbolParam);
+  const cleanSymbol = symbolParam.replace('.JK', '').toUpperCase();
 
-  if (cache.has(symbol)) {
-    const cached = cache.get(symbol);
-    if (Date.now() - cached.timestamp < 3600000) {
+  if (cache.has(cleanSymbol)) {
+    const cached = cache.get(cleanSymbol);
+    if (Date.now() - cached.timestamp < 3600000) { // 1 hour
       return new Response(JSON.stringify(cached.data), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
@@ -51,62 +65,62 @@ export async function onRequest(context) {
   }
 
   try {
-    const data = await fetchQuoteSummary(symbol, [
-      'financialData', 'defaultKeyStatistics', 'assetProfile', 'summaryDetail'
-    ]);
+    const { row } = await fetchTradingViewFundamentals(cleanSymbol);
+    
+    const [
+      name, price, sector, industry,
+      per, pbv, eps,
+      roePct, roaPct, totalDebt, totalRevenue, netIncome,
+      sharesOutstanding, totalCash, divYieldPct,
+      evEbitda, priceToSales, netMarginPct, freeCashflow
+    ] = row;
 
-    const fd = data.financialData || {};
-    const dks = data.defaultKeyStatistics || {};
-    const ap = data.assetProfile || {};
-    const sd = data.summaryDetail || {};
-
-    const price = raw(fd.currentPrice) || raw(sd.previousClose);
-    if (!price) throw new Error('Data harga tidak ditemukan');
-
-    const bookValue = raw(dks.bookValue);
-    const sharesOutstanding = raw(dks.sharesOutstanding);
-
+    const bookValuePerShare = (price && pbv) ? price / pbv : null;
+    
     const result = {
-      symbol: symbol.replace('.JK', ''),
-      name: sd.shortName || sd.longName || symbol,
+      symbol: cleanSymbol,
+      name: name || cleanSymbol,
       price: price,
-      sector: ap.sector || 'Unknown',
-      industry: ap.industry || 'Unknown',
-      eps: raw(dks.trailingEps) || raw(fd.revenuePerShare),
-      trailingEps: raw(dks.trailingEps),
-      forwardEps: raw(dks.forwardEps),
-      per: raw(sd.trailingPE),
-      forwardPer: raw(sd.forwardPE),
-      pbv: raw(dks.priceToBook),
-      bookValuePerShare: bookValue,
+      sector: sector || 'Unknown',
+      industry: industry || 'Unknown',
+      eps: eps,
+      trailingEps: eps,
+      forwardEps: null,
+      per: per,
+      forwardPer: null,
+      pbv: pbv,
+      bookValuePerShare: bookValuePerShare,
       sharesOutstanding: sharesOutstanding,
-      equity: (bookValue && sharesOutstanding) ? bookValue * sharesOutstanding : null,
-      totalDebt: raw(fd.totalDebt),
-      totalCash: raw(fd.totalCash),
-      operatingCashflow: raw(fd.operatingCashflow),
-      freeCashflow: raw(fd.freeCashflow),
-      totalRevenue: raw(fd.totalRevenue),
-      netIncome: raw(fd.netIncomeToCommon),
-      revenueGrowth: raw(fd.revenueGrowth),
-      earningsGrowth: raw(fd.earningsGrowth),
-      roe: raw(fd.returnOnEquity),
-      roa: raw(fd.returnOnAssets),
-      netProfitMargin: raw(fd.profitMargins),
-      dividendPerShare: raw(sd.trailingAnnualDividendRate) || raw(sd.dividendRate),
-      dividendPayoutRatio: raw(sd.payoutRatio),
-      evEbitda: raw(dks.enterpriseToEbitda),
-      evSales: raw(dks.enterpriseToRevenue),
-      priceToSales: raw(sd.priceToSalesTrailing12Months) || raw(dks.priceToSalesTrailing12Months),
-      lastQuarterDate: dks.mostRecentQuarter ? new Date(raw(dks.mostRecentQuarter) * 1000).toISOString().split('T')[0] : null
+      equity: (bookValuePerShare && sharesOutstanding) ? bookValuePerShare * sharesOutstanding : null,
+      totalDebt: totalDebt,
+      totalCash: totalCash,
+      operatingCashflow: null,
+      freeCashflow: freeCashflow,
+      totalRevenue: totalRevenue,
+      netIncome: netIncome,
+      revenueGrowth: null,
+      earningsGrowth: null,
+      roe: roePct ? roePct / 100 : null,
+      roa: roaPct ? roaPct / 100 : null,
+      netProfitMargin: netMarginPct ? netMarginPct / 100 : null,
+      dividendPerShare: (divYieldPct && price) ? (divYieldPct / 100) * price : null,
+      dividendPayoutRatio: null,
+      evEbitda: evEbitda,
+      evSales: null,
+      priceToSales: priceToSales,
+      lastQuarterDate: null
     };
 
-    cache.set(symbol, { timestamp: Date.now(), data: result });
+    cache.set(cleanSymbol, { timestamp: Date.now(), data: result });
 
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (err) {
-    console.error(`Error fetching valuation data for ${symbol}:`, err);
-    return new Response(JSON.stringify({ error: 'Gagal mengambil data fundamental dari Yahoo Finance: ' + err.message }), { status: 500 });
+    console.error(`Error fetching valuation data for ${cleanSymbol}:`, err);
+    return new Response(JSON.stringify({ error: 'Gagal mengambil data fundamental dari TradingView: ' + err.message }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
   }
 };

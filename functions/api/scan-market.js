@@ -8,8 +8,7 @@ const PRIORITY_UNIVERSE = [
   'BBCA', 'BBRI', 'BMRI', 'BBNI', 'TLKM', 'ASII', 'UNVR', 'ICBP', 'INDF', 'AMRT',
   'GOTO', 'BRIS', 'MDKA', 'ANTM', 'INCO', 'ADRO', 'PTBA', 'ITMG', 'HRUM', 'MEDC',
   'PGAS', 'ISAT', 'EXCL', 'CPIN', 'JPFA', 'KLBF', 'MIKA', 'TPIA', 'BRPT', 'AKRA',
-  'MAPI', 'ACES', 'SMGR', 'INTP', 'ESSA', 'ARTO', 'BUKA', 'EMTK', 'SIDO', 'INKP',
-  'AMMN'
+  'MAPI', 'ACES', 'SMGR', 'INTP', 'ESSA'
 ];
 
 const MARKET_MOVER_EXTRA = [
@@ -19,9 +18,8 @@ const MARKET_MOVER_EXTRA = [
   'BLES', 'APLI', 'ASPR', 'ISEA', 'FORU'
 ];
 
-const scanLimit = Number(process.env.SCAN_MARKET_LIMIT || 320);
-const UNIVERSE = [...new Set([...PRIORITY_UNIVERSE, ...MARKET_MOVER_EXTRA, ...IDX_UNIVERSE])]
-  .slice(0, Number.isFinite(scanLimit) && scanLimit > 0 ? scanLimit : 320);
+const baseLimit = Number(process.env.SCAN_MARKET_LIMIT || 35);
+const UNIVERSE = [...new Set([...PRIORITY_UNIVERSE, ...MARKET_MOVER_EXTRA, ...IDX_UNIVERSE])];
 
 const LIQUID_INTRADAY = UNIVERSE.slice(0, 80);
 const TV_MOVER_LIMIT = 20;
@@ -342,21 +340,37 @@ export async function onRequest(context) {
   const req = context.request;
   const env = context.env;
   globalThis.process = { env: { ...(globalThis.process ? globalThis.process.env : {}), ...env } };
+  const u = new URL(req.url);
+  const qLimit = Number(u.searchParams.get('limit'));
+  const qIntradayLimit = Number(u.searchParams.get('intradayLimit'));
+  
+  const scanLimit = (qLimit > 0) ? qLimit : baseLimit;
+  const intradayLimit = (qIntradayLimit > 0) ? qIntradayLimit : 10;
+  
+  // Hard cap to prevent Cloudflare Worker 503 limit
+  const maxSafeScan = Math.min(scanLimit, 35);
+  const maxSafeIntraday = Math.min(intradayLimit, 10);
+
+  const targetUniverse = UNIVERSE.slice(0, maxSafeScan);
+  const targetIntraday = LIQUID_INTRADAY.slice(0, maxSafeIntraday);
+
   try {
     const tradingViewMoversPromise = fetchTradingViewMarketMovers().catch(() => null);
-    const daily = await withLimit(UNIVERSE, 10, async symbol => {
+    
+    // Fetch intraday FIRST to ensure day trade data gets priority before rate limits hit
+    const intraday = await withLimit(targetIntraday, 8, async symbol => {
+      const payload = await yahooChart(symbol, { interval: '5min', outputsize: 180 });
+      const day = analyzeForScan(payload.candles, 'day');
+      if (!day) return null;
+      return { symbol, meta: payload.meta, day };
+    });
+
+    const daily = await withLimit(targetUniverse, 10, async symbol => {
       const payload = await yahooChart(symbol, { interval: '1day', outputsize: 260 });
       const swing = analyzeForScan(payload.candles, 'swing');
       const investment = analyzeForScan(payload.candles, 'long');
       if (!swing || !investment) return null;
       return { symbol, meta: payload.meta, candles: payload.candles, swing, investment };
-    });
-
-    const intraday = await withLimit(LIQUID_INTRADAY, 8, async symbol => {
-      const payload = await yahooChart(symbol, { interval: '5min', outputsize: 180 });
-      const day = analyzeForScan(payload.candles, 'day');
-      if (!day) return null;
-      return { symbol, meta: payload.meta, day };
     });
 
     const trading = intraday

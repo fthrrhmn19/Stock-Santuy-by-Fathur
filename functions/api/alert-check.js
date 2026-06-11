@@ -114,7 +114,7 @@ const uniqueSymbols = scan => {
     ...(scan.market?.topValue || []).slice(0, 6),
     ...(scan.market?.topVolume || []).slice(0, 6)
   ].map(item => item.symbol).filter(Boolean);
-  return [...new Set(symbols)].slice(0, 34);
+  return [...new Set(symbols)].slice(0, 8);
 };
 
 const withLimit = async (items, limit, task) => {
@@ -198,10 +198,10 @@ const findBaggerAlerts = scan => {
 
 const findSwingEntryAlerts = async scan => {
   const symbols = [...new Set([
-    ...(scan.swing || []).slice(0, 14).map(item => item.symbol),
-    ...(scan.market?.topGainer || []).slice(0, 6).map(item => item.symbol),
-    ...(scan.market?.volumeSpike || []).slice(0, 6).map(item => item.symbol)
-  ].filter(Boolean))].slice(0, 18);
+    ...(scan.swing || []).slice(0, 8).map(item => item.symbol),
+    ...(scan.market?.topGainer || []).slice(0, 3).map(item => item.symbol),
+    ...(scan.market?.volumeSpike || []).slice(0, 3).map(item => item.symbol)
+  ].filter(Boolean))].slice(0, 5);
 
   const alerts = await withLimit(symbols, 5, async symbol => {
     const payload = await yahooChart(symbol, { interval: '1day', outputsize: 320 });
@@ -283,7 +283,7 @@ const signalSignature = ({ session, picks, harmonicAlerts, baggerAlerts, swingEn
 
 const shouldSend = payload => {
   if (payload.session.key !== 'watch') return true;
-  if (!payload.harmonicAlerts.length) return false;
+  if (!payload.harmonicAlerts.length && !payload.swingEntryAlerts.length) return false;
 
   const now = Date.now();
   const cache = cleanupSignalCache();
@@ -316,11 +316,8 @@ const emailHtml = ({ session, picks, harmonicAlerts, baggerAlerts, swingEntryAle
       <h1 style="margin-top:0">${esc(session.title)}</h1>
       <p>${esc(session.focus)}</p>
       <p>${watch
-        ? `Harmonic pattern baru: <strong>${harmonicAlerts.length}</strong>.`
-        : `Kandidat skor: <strong>${picks.length}</strong>,
-          harmonic: <strong>${harmonicAlerts.length}</strong>,
-          bagger: <strong>${baggerAlerts.length}</strong>,
-          swing entry: <strong>${swingEntryAlerts.length}</strong>.`
+        ? `Sinyal realtime: <strong>${harmonicAlerts.length}</strong> harmonic, <strong>${swingEntryAlerts.length}</strong> swing entry dekat harga masuk.`
+        : `Kandidat skor: <strong>${picks.length}</strong>, bagger: <strong>${baggerAlerts.length}</strong>.`
       }</p>
     ${picks.length ? `
       <h2 style="margin-top:24px">Kandidat Utama</h2>
@@ -375,7 +372,10 @@ const emailText = ({ session, picks, harmonicAlerts, baggerAlerts, swingEntryAle
       session.focus,
       '',
       `Harmonic pattern baru: ${harmonicAlerts.length}`,
-      ...harmonicAlerts.map(item => `${item.symbol}: ${item.timeframe} ${item.bias} ${item.pattern} score ${round(item.score)} harga ${rupiah(item.price)}`)
+      ...harmonicAlerts.map(item => `${item.symbol}: ${item.timeframe} ${item.bias} ${item.pattern} score ${round(item.score)} harga ${rupiah(item.price)}`),
+      '',
+      `Swing entry dekat harga masuk: ${swingEntryAlerts.length}`,
+      ...swingEntryAlerts.map(item => `${item.symbol}: ${item.trigger}, entry ${rupiah(item.entry)}, stop ${rupiah(item.stop)}, TP1 ${rupiah(item.target1)}`)
     ].join('\n');
   }
 
@@ -408,7 +408,7 @@ export async function onRequest(context) {
     const forceSend = u.searchParams.get('send') === '1'
       && manualSecret
       && u.searchParams.get('secret') === manualSecret;
-    const scheduledRun = req.headers.get('X-NF-Event') === 'schedule';
+    const scheduledRun = req.headers.get('X-CF-Event') === 'schedule';
     const sendRequested = forceSend || scheduledRun || req.method !== 'GET';
     const quickStatus = !sendRequested && session.key === 'default';
     const marketSchedule = await idxMarketSchedule();
@@ -470,26 +470,27 @@ export async function onRequest(context) {
       });
     }
 
-    const res = await scanMarket({ request: new Request(`${siteUrl()}/api/scan-market`), env: context.env });
-    const scan = await res.json();
     const watchSession = session.key === 'watch';
+    const scanLimit = watchSession ? 0 : 15;
+    const scanIntradayLimit = watchSession ? 0 : 5;
+    const res = await scanMarket({ request: new Request(`${siteUrl()}/api/scan-market?limit=${scanLimit}&intradayLimit=${scanIntradayLimit}`), env: context.env });
+    const scan = await res.json();
+    
     let harmonicAlerts = [];
     let swingEntryAlerts = [];
     let picks = [];
     let baggerAlerts = [];
 
-    if (!quickStatus) {
-      harmonicAlerts = await findHarmonicAlerts(scan, session);
-    }
-
     if (watchSession) {
+      harmonicAlerts = await findHarmonicAlerts(scan, session);
+      swingEntryAlerts = await findSwingEntryAlerts(scan);
       harmonicAlerts = sendRequested ? filterFreshWatchHarmonics(harmonicAlerts) : harmonicAlerts;
+      // swingEntryAlerts could also be filtered if needed, but we rely on realtime trigger
     } else {
-      [swingEntryAlerts, picks, baggerAlerts] = await Promise.all([
-        quickStatus ? [] : findSwingEntryAlerts(scan),
-        pickCandidates(scan, session),
-        findBaggerAlerts(scan)
-      ]);
+      const picksResult = await pickCandidates(scan, session);
+      const baggerResult = findBaggerAlerts(scan);
+      picks = picksResult || [];
+      baggerAlerts = baggerResult || [];
     }
 
     const payload = { session, picks, harmonicAlerts, baggerAlerts, swingEntryAlerts };
@@ -500,8 +501,8 @@ export async function onRequest(context) {
     if (canSend) {
       email = await sendEmail({
         subject: watchSession
-          ? `${session.subject}: ${harmonicAlerts.length} pattern baru`
-          : `${session.subject}: ${picks.length} kandidat, ${harmonicAlerts.length} harmonic, ${swingEntryAlerts.length} entry`,
+          ? `${session.subject}: ${harmonicAlerts.length} harmonic, ${swingEntryAlerts.length} swing entry`
+          : `${session.subject}: ${picks.length} kandidat`,
         html: emailHtml(payload),
         text: emailText(payload)
       });

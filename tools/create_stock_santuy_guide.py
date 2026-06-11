@@ -701,7 +701,7 @@ def build_doc():
         ("Chart kosong", "Cek koneksi, provider, ticker, dan apakah saham tersedia di Yahoo/Twelve Data."),
         ("Screener lama loading", "Scanner memanggil banyak ticker dan sumber publik; tunggu atau klik refresh lagi."),
         ("Login muncul", "Masukkan password akses jika login opsional diaktifkan."),
-        ("Alert tidak terkirim", "Cek RESEND_API_KEY, email tujuan, email pengirim, jadwal Netlify, dan SITE_URL."),
+        ("Alert tidak terkirim", "Cek RESEND_API_KEY, email tujuan, email pengirim, jadwal Cloudflare, dan SITE_URL."),
         ("Angka beda dari broker", "Provider gratis tidak selalu realtime; broker/orderbook lebih dekat ke data eksekusi."),
     ])
 

@@ -30,7 +30,7 @@ jobs:
           echo "⏰ Triggering signal-morning..."
           HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
             -X POST \
-            -H "X-NF-Event: schedule" \
+            -H "X-CF-Event: schedule" \
             --retry 2 --retry-delay 5 --max-time 120 \
             "$SITE_URL/api/signal-morning")
           echo "HTTP Status: $HTTP_CODE"
@@ -44,7 +44,7 @@ jobs:
           echo "☀️ Triggering signal-midday..."
           HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
             -X POST \
-            -H "X-NF-Event: schedule" \
+            -H "X-CF-Event: schedule" \
             --retry 2 --retry-delay 5 --max-time 120 \
             "$SITE_URL/api/signal-midday")
           echo "HTTP Status: $HTTP_CODE"
@@ -58,7 +58,7 @@ jobs:
           echo "🌅 Triggering signal-afternoon..."
           HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
             -X POST \
-            -H "X-NF-Event: schedule" \
+            -H "X-CF-Event: schedule" \
             --retry 2 --retry-delay 5 --max-time 120 \
             "$SITE_URL/api/signal-afternoon")
           echo "HTTP Status: $HTTP_CODE"
@@ -72,7 +72,7 @@ jobs:
           echo "👁️ Triggering signal-watch..."
           HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
             -X POST \
-            -H "X-NF-Event: schedule" \
+            -H "X-CF-Event: schedule" \
             --retry 2 --retry-delay 5 --max-time 120 \
             "$SITE_URL/api/signal-watch")
           echo "HTTP Status: $HTTP_CODE"

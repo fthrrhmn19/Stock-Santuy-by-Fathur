@@ -1,16 +1,16 @@
 # Stock Santuy by Fathur
 
-Dashboard analisis saham berbasis HTML, CSS, Vanilla JavaScript, Vite, dan Netlify Functions. Rekomendasi day trade, swing, long term, dan potential bagger dihitung rules-based dari OHLCV, news, dan risk scoring.
+Dashboard analisis saham berbasis HTML, CSS, Vanilla JavaScript, Vite, dan Cloudflare Pages Functions. Rekomendasi day trade, swing, long term, dan potential bagger dihitung rules-based dari OHLCV, news, dan risk scoring.
 
 ## Fitur yang sudah dibuat
-- Login opsional melalui Netlify Function dan cookie HttpOnly.
+- Login opsional melalui Cloudflare Function dan cookie HttpOnly.
 - Pencarian ticker saham IDX.
 - Navbar sticky dan flow analisa cepat agar tidak perlu scroll jauh.
 - Screener day trade, swing, long term, dan potential bagger.
 - Tombol Harian untuk membuat gambar PNG rekomendasi saham hari itu.
 - News feed dari RSS gratis dan deteksi kata kunci ekspansi/lapkeu.
 - Rasio valuasi/fundamental EPS, PER, PBV, ROE, dan DER dari scanner publik untuk validasi awal lapkeu.
-- Email alert otomatis via scheduled Netlify Function jika env email sudah diisi.
+- Email alert otomatis via scheduled Cloudflare Function jika env email sudah diisi.
 - Grafik candlestick live intraday saat Sesi I/II IDX berjalan, lalu pause saat istirahat/tutup.
 - Grafik candlestick, volume, EMA20, stop loss, dan target.
 - RSI, MACD, ATR, relative volume, support, resistance, dan scoring swing.
@@ -52,7 +52,7 @@ IDX_CLIENT_SECRET=
 
 ACCESS_PASSWORD_HASH=pbkdf2_sha256$...
 SESSION_SECRET=ganti_dengan_string_acak_panjang
-ALLOWED_ORIGIN=https://stock-santuy.netlify.app
+ALLOWED_ORIGIN=https://stock-santuy-cloudflare.pages.dev
 
 CACHE_TTL_QUOTE=60
 CACHE_TTL_INTRADAY=60
@@ -68,10 +68,10 @@ HARMONIC_ALERT_LOOKBACK=20
 HARMONIC_ALERT_RECENT_LOOKBACK=1
 WATCH_HARMONIC_COOLDOWN_HOURS=4
 IDX_HOLIDAYS=
-SITE_URL=https://stock-santuy.netlify.app
+SITE_URL=https://stock-santuy-cloudflare.pages.dev
 ```
 
-Email alert memakai Resend API dari server-side Netlify Function. Jadwal Netlify memakai UTC: `signal-morning` berjalan 00:00 WIB untuk menu pagi, `signal-midday` 12:00 WIB, `signal-afternoon` 15:40 WIB, dan `signal-watch` tiap 5 menit sekitar jam market. Menu pagi/siang/sore berisi rekomendasi sesuai sesi, sedangkan realtime watch hanya mengirim saham yang baru membentuk harmonic pattern intraday 15 menit. Sinyal watch yang sama masuk cooldown `WATCH_HARMONIC_COOLDOWN_HOURS` agar tidak mengirim saham yang sama berulang. Function akan skip email saat weekend atau tanggal libur nasional/cuti bersama dari API Hari Libur Indonesia, dan watch alert pause saat pasar reguler sedang istirahat atau tutup. Untuk libur khusus BEI, isi `IDX_HOLIDAYS` dengan format `YYYY-MM-DD:Nama Libur`. Jika ingin sender domain sendiri, verifikasi domain di Resend lalu ganti `ALERT_EMAIL_FROM`.
+Email alert memakai Resend API dari server-side Cloudflare Function. Jadwal Cloudflare memakai UTC: `signal-morning` berjalan 00:00 WIB untuk menu pagi, `signal-midday` 12:00 WIB, `signal-afternoon` 15:40 WIB, dan `signal-watch` tiap 5 menit sekitar jam market. Menu pagi/siang/sore berisi rekomendasi sesuai sesi, sedangkan realtime watch hanya mengirim saham yang baru membentuk harmonic pattern intraday 15 menit. Sinyal watch yang sama masuk cooldown `WATCH_HARMONIC_COOLDOWN_HOURS` agar tidak mengirim saham yang sama berulang. Function akan skip email saat weekend atau tanggal libur nasional/cuti bersama dari API Hari Libur Indonesia, dan watch alert pause saat pasar reguler sedang istirahat atau tutup. Untuk libur khusus BEI, isi `IDX_HOLIDAYS` dengan format `YYYY-MM-DD:Nama Libur`. Jika ingin sender domain sendiri, verifikasi domain di Resend lalu ganti `ALERT_EMAIL_FROM`.
 
 Chart saham dan IHSG memakai endpoint `/api/market-schedule` untuk mengikuti jam pasar reguler IDX: Senin-Kamis Sesi I 09:00-12:00 dan Sesi II 13:30-15:49:59 WIB; Jumat Sesi I 09:00-11:30 dan Sesi II 14:00-15:49:59 WIB. Saat sesi aktif, chart memakai candle intraday 5 menit dan auto-refresh sesuai `LIVE_REFRESH_MS`/`CACHE_TTL_INTRADAY`; di luar sesi, status berubah pause dan chart tidak di-refresh otomatis.
 
@@ -80,20 +80,22 @@ Untuk password login `stocksantuyanalisis`, `.env` lokal sudah berisi hash yang 
 node -e "const crypto=require('crypto');const p='password_anda';const s=crypto.randomBytes(16).toString('hex');const i=210000;console.log('pbkdf2_sha256$'+i+'$'+s+'$'+crypto.pbkdf2Sync(p,s,i,32,'sha256').toString('hex'))"
 ```
 
-Jalankan dengan Netlify Dev agar Functions ikut aktif:
+Jalankan dengan Wrangler agar Functions ikut aktif:
+
 ```bash
-npx netlify dev
+npx wrangler pages dev dist
 ```
 
 Buka `http://localhost:8888`.
 
-## Deploy Netlify
-1. Upload project ke GitHub.
-2. Hubungkan repository ke Netlify.
-3. Build command: `npm run build`.
-4. Publish directory: `dist`.
-5. Functions directory: `netlify/functions`.
-6. Di Project configuration -> Environment variables, tambahkan variabel dari `.env.example`.
+## Deploy Cloudflare Pages
+
+1. Push ke repo GitHub.
+2. Hubungkan repository ke Cloudflare Pages.
+3. Build command: `npm run build`
+4. Publish directory: `dist`
+5. Functions directory: `functions`.
+6. Set Environment Variables di menu Settings Cloudflare Pages.on -> Environment variables, tambahkan variabel dari `.env.example`.
 7. Deploy ulang.
 
 Jangan memasukkan `.env` atau API key ke GitHub.
